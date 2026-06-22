@@ -1606,7 +1606,7 @@ async function smGenerateNarrative(d, apiKey, rptLang){
     uxCount: d.uxCount,
     dateRange: d.dateLabel
   });
-  var resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key="+apiKey,{
+  var resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="+apiKey,{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({contents:[{parts:[{text:prompt+"\n\nData:\n"+dataStr}]}],generationConfig:{temperature:0.4,maxOutputTokens:900}})

@@ -1359,12 +1359,15 @@ function openLink(el){var url=el.getAttribute("data-href");if(url&&url!=="#")win
 // EXECUTIVE SUMMARY — state, helpers, generation, PDF, email
 // ════════════════════════════════════════════════════════════════
 var SM = {
-  rptLang:    "en",
-  dateFrom:   "",
-  dateTo:     "",
-  recipients: [],
-  generated:  false,
-  pdfBlob:    null,
+  rptLang:        "en",
+  dateFrom:       "",
+  dateTo:         "",
+  recipients:     [],
+  generated:      false,
+  pdfBlob:        null,
+  _configLoading: false,  // guard: prevents smLoadConfig re-entrancy
+  _savePending:   false,  // guard: prevents smSaveRecipientStore re-entrancy
+  _saveDirty:     false,  // flag: queues one more save after current finishes
 };
 
 // Rewaa brand logo SVG (teal, for light backgrounds, inline)
@@ -1380,6 +1383,7 @@ function openSummaryModal(){
 function closeSummaryModal(){
   document.getElementById("summaryModal").classList.add("hidden");
   document.body.style.overflow="";
+  SM._configLoading = false; // reset so next open fetches fresh
 }
 
 // ── Settings: API key + language persist in localStorage (device-only, fine) ─
@@ -1405,18 +1409,22 @@ function smToggleDatePicker(){
 // ── Config: recipients loaded from Apps Script Meta sheet (shared across all users/devices) ──
 // Uses action=get_config which returns { lastSync, recipients[] } in one call
 function smLoadConfig(){
+  // Guard: don't fire if already in flight
+  if(SM._configLoading) return;
+  SM._configLoading = true;
+
   var token   = sessionStorage.getItem("gsi_credential")||"";
   var cbName  = "smConfigCb_"+Date.now();
   var hint    = document.getElementById("smRecipientsHint");
   if(hint) hint.textContent = "Loading...";
 
   window[cbName] = function(json){
-    var s = document.getElementById("_smConfigScript");
+    SM._configLoading = false;
+    var s = document.getElementById(cbName);
     if(s) s.parentNode.removeChild(s);
     delete window[cbName];
 
     if(!json || json.error || json.status==="error"){
-      // Graceful fallback: try localStorage if Apps Script unavailable
       console.warn("smLoadConfig fallback to localStorage:", json ? json.error : "no response");
       try{ SM.recipients = JSON.parse(localStorage.getItem("smRecipients")||"[]"); }catch(e){ SM.recipients=[]; }
       smRenderRecipients();
@@ -1428,16 +1436,17 @@ function smLoadConfig(){
     SM.recipients = Array.isArray(cfg.recipients) ? cfg.recipients : [];
     smRenderRecipients();
     if(hint) hint.textContent = "Recipients synced from Google Sheets ✓";
-    // Also cache locally as fallback
     localStorage.setItem("smRecipients", JSON.stringify(SM.recipients));
   };
 
   var script = document.createElement("script");
-  script.id  = "_smConfigScript";
+  script.id  = cbName;
   script.src = APPS_SCRIPT_URL + "?action=get_config&callback=" + cbName + "&token=" + encodeURIComponent(token);
   script.onerror = function(){
+    SM._configLoading = false;
     delete window[cbName];
-    // Fallback to localStorage
+    var s = document.getElementById(cbName);
+    if(s) s.parentNode.removeChild(s);
     try{ SM.recipients = JSON.parse(localStorage.getItem("smRecipients")||"[]"); }catch(e){ SM.recipients=[]; }
     smRenderRecipients();
     if(hint) hint.textContent = "Offline — using local cache";
@@ -1447,38 +1456,46 @@ function smLoadConfig(){
 
 // ── Save recipients to Apps Script Meta sheet ──────────────────
 function smSaveRecipientStore(){
-  var token  = sessionStorage.getItem("gsi_credential")||"";
-  var cbName = "smSaveCb_"+Date.now();
-  var hint   = document.getElementById("smRecipientsHint");
+  if(SM._savePending){ SM._saveDirty=true; return; }
+  SM._savePending = true;
+  SM._saveDirty   = false;
+
+  var token   = sessionStorage.getItem("gsi_credential")||"";
+  var cbName  = "smSaveCb_"+Date.now();
+  var hint    = document.getElementById("smRecipientsHint");
   if(hint) hint.textContent = "Saving...";
 
   window[cbName] = function(json){
-    var s = document.getElementById("_smSaveScript");
+    SM._savePending = false;
+    var s = document.getElementById(cbName);
     if(s) s.parentNode.removeChild(s);
     delete window[cbName];
     if(json && json.status==="ok"){
       if(hint) hint.textContent = "Saved to Google Sheets ✓";
-      // Keep localStorage in sync as fallback cache
       localStorage.setItem("smRecipients", JSON.stringify(SM.recipients));
     } else {
       if(hint) hint.textContent = "Sheet save failed — saved locally";
       localStorage.setItem("smRecipients", JSON.stringify(SM.recipients));
     }
     setTimeout(function(){ if(hint) hint.textContent = "Recipients synced from Google Sheets ✓"; }, 2500);
+    if(SM._saveDirty) smSaveRecipientStore();
   };
 
-  // JSONP doesn't support POST body, so we pass recipients as a comma-separated query param
   var recipientsParam = encodeURIComponent(SM.recipients.join(","));
   var script = document.createElement("script");
-  script.id  = "_smSaveScript";
+  script.id  = cbName;
   script.src = APPS_SCRIPT_URL +
     "?action=save_recipients&callback=" + cbName +
     "&token=" + encodeURIComponent(token) +
     "&recipients=" + recipientsParam;
   script.onerror = function(){
+    SM._savePending = false;
     delete window[cbName];
+    var s = document.getElementById(cbName);
+    if(s) s.parentNode.removeChild(s);
     localStorage.setItem("smRecipients", JSON.stringify(SM.recipients));
     if(hint) hint.textContent = "Save failed — stored locally";
+    if(SM._saveDirty) smSaveRecipientStore();
   };
   document.body.appendChild(script);
 }

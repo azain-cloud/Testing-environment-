@@ -1609,10 +1609,7 @@ async function smGenerateNarrative(d, apiKey, rptLang){
   var resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key="+apiKey,{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({contents:[{parts:[{text:prompt+"
-
-Data:
-"+dataStr}]}],generationConfig:{temperature:0.4,maxOutputTokens:900}})
+    body: JSON.stringify({contents:[{parts:[{text:prompt+"\n\nData:\n"+dataStr}]}],generationConfig:{temperature:0.4,maxOutputTokens:900}})
   });
   if(!resp.ok) throw new Error("Gemini API error: "+resp.status);
   var json = await resp.json();
@@ -1651,10 +1648,7 @@ function smBuildReportHTML(d, narrative, cxComments){
 
   // ── AI Narrative ──
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الملخص التنفيذي":"Executive Overview")+'</div>';
-  html += '<div class="rpt-narrative">'+esc(narrative).replace(/
-
-/g,'</div><div class="rpt-narrative" style="margin-top:10px">').replace(/
-/g,' ')+'</div></div>';
+  html += '<div class="rpt-narrative">'+esc(narrative).replace(/\n\n/g,'</div><div class="rpt-narrative" style="margin-top:10px">').replace(/\n/g,' ')+'</div></div>';
 
   // ── KPIs ──
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"المقاييس الرئيسية":"Key Metrics")+'</div>';

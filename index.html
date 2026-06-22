@@ -1587,29 +1587,35 @@ function smGetData(){
 // ── Gemini AI narrative generation ──────────────────────────────
 async function smGenerateNarrative(d, apiKey, rptLang){
   var isAR = rptLang==="ar";
-  var prompt = (isAR
-    ? "أنت محلل منتجات محترف. اكتب ملخصاً تنفيذياً رسمياً باللغة العربية بناءً على البيانات التالية من منصة رواء لإدارة أفكار العملاء. اكتب فقرة تنفيذية واحدة متدفقة تلخص الوضع العام، ثم فقرات قصيرة منفصلة لكل قسم: الأفكار الأعلى تصويتاً، والأفكار عالية الخطورة، وتوزيع الوحدات. الأسلوب: رسمي، مهني، موجز. لا تستخدم النقاط أو العناوين — فقط نثر سردي."
-    : "You are a professional product analyst. Write a formal executive summary in English based on the following data from Rewaa's customer ideas management platform. Write one flowing executive paragraph summarizing the overall situation, then separate short paragraphs for: top voted ideas, at-risk ideas, and module breakdown. Style: formal executive report, no bullet points, no headings — narrative prose only."
-  );
-  var dataStr = JSON.stringify({
-    totalIdeas: d.total,
-    launchedIdeas: d.launched,
-    launchRate: d.pct+"%",
-    nonLaunchedIdeas: d.nonLaunched,
-    totalVotes: d.votes,
-    avgVotesPerIdea: d.avgV,
-    atRiskCount: d.atRisk.length,
-    topIdeas: d.top10.slice(0,5).map(function(r){return {title:(rptLang==="en"&&r.content_en?r.content_en:r.content_ar).substring(0,120), votes:r.votes, module:r.module};}),
-    moduleBreakdown: d.modules.slice(0,6).map(function(m){return {module:m[0], total:m[1].t, launched:m[1].l};}),
-    designInvolvement: d.designCount,
-    uiCount: d.uiCount,
-    uxCount: d.uxCount,
-    dateRange: d.dateLabel
-  });
-  var resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="+apiKey,{
+
+  // Build rich contextual lists for the prompt
+  var atRiskList = d.atRisk.slice(0,5).map(function(r,i){
+    var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
+    var txt  = isAR ? (r.content_ar||r.content_en||"") : (r.content_en||r.content_ar||"");
+    return (i+1)+". \""+txt.substring(0,100)+"\" — "+r.votes+" votes, "+days+" days pending, module: "+r.module;
+  }).join("\n");
+
+  var top5List = d.top10.slice(0,5).map(function(r,i){
+    var txt = isAR ? (r.content_ar||r.content_en||"") : (r.content_en||r.content_ar||"");
+    return (i+1)+". \""+txt.substring(0,100)+"\" — "+r.votes+" votes, module: "+r.module;
+  }).join("\n");
+
+  var modList = d.modules.slice(0,8).map(function(m){
+    var pct = m[1].t ? Math.round((m[1].l/m[1].t)*100) : 0;
+    return "- "+m[0]+": "+m[1].t+" ideas, "+m[1].l+" launched ("+pct+"% launch rate), "+m[1].v+" total votes";
+  }).join("\n");
+
+  var prompt = isAR
+    ? "أنت محلل منتجات أول في شركة رواء (B2B SaaS سعودية). اكتب ملخصاً تنفيذياً احترافياً وعميقاً باللغة العربية موجهاً للقيادة التنفيذية. لا تكتفِ بسرد الأرقام — حللها واستخرج رؤى قابلة للتنفيذ.\n\nالبيانات:\n- إجمالي الأفكار: "+d.total+" | المُطلقة: "+d.launched+" ("+d.pct+"%) | غير المُطلقة: "+d.nonLaunched+"\n- إجمالي التصويتات: "+d.votes+" | متوسط: "+d.avgV+"\n- أفكار عالية الخطورة: "+d.atRisk.length+"\n- التصميم: "+d.designCount+" | UI: "+d.uiCount+" | UX: "+d.uxCount+"\n- الفترة: "+d.dateLabel+"\n\nأبرز 5 أفكار بالتصويتات:\n"+top5List+"\n\nأفكار عالية الخطورة (أكثر إلحاحاً):\n"+atRiskList+"\n\nتوزيع الوحدات:\n"+modList+"\n\nاكتب 5 فقرات نثرية متدفقة (بدون عناوين أو نقاط):\n1. فقرة تنفيذية شاملة: الصورة الكبيرة، أين يتركّز الألم، مستوى استجابة المنتج\n2. الأفكار الأعلى تأثيراً: ما يطلبه العملاء فعلاً والأنماط المشتركة\n3. الأفكار عالية الخطورة: مخاطر التأخير والوحدات التي تحتاج تدخلاً فورياً\n4. تحليل الوحدات: الفجوات بين الطلب ومعدل الإطلاق والفرص غير المستغلة\n5. توصية تنفيذية واحدة واضحة وقابلة للتنفيذ هذا الأسبوع"
+    : "You are a senior product analyst at Rewaa, a Saudi B2B SaaS company. Write a rich, insightful executive summary in English for C-level leadership. Do NOT restate numbers — analyse them and extract actionable intelligence.\n\nData:\n- Total ideas: "+d.total+" | Launched: "+d.launched+" ("+d.pct+"%) | Non-launched: "+d.nonLaunched+"\n- Total votes: "+d.votes+" | Avg per idea: "+d.avgV+"\n- At-risk ideas (20+ votes, 90+ days pending): "+d.atRisk.length+"\n- Design: "+d.designCount+" | UI: "+d.uiCount+" | UX: "+d.uxCount+"\n- Period: "+d.dateLabel+"\n\nTop 5 most-voted non-launched ideas:\n"+top5List+"\n\nMost urgent at-risk ideas:\n"+atRiskList+"\n\nModule breakdown:\n"+modList+"\n\nWrite 5 flowing narrative paragraphs (no headings, no bullets):\n1. Opening executive paragraph: Connect patterns to the bigger picture — where is customer pain concentrated? How responsive has the product been?\n2. High-impact ideas: What are customers actually asking for? What common theme or unmet need do the top ideas reveal?\n3. At-risk ideas: What is the customer satisfaction risk of continued delay? Which modules need immediate action and why?\n4. Module analysis: Where is the gap between customer demand and launch rate? Where are the biggest untapped opportunities?\n5. One clear, specific, actionable recommendation a CPO or CEO could act on this week.";
+
+  var resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key="+apiKey,{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({contents:[{parts:[{text:prompt+"\n\nData:\n"+dataStr}]}],generationConfig:{temperature:0.4,maxOutputTokens:900}})
+    body: JSON.stringify({
+      contents:[{parts:[{text:prompt}]}],
+      generationConfig:{temperature:0.5,maxOutputTokens:1400}
+    })
   });
   if(!resp.ok) throw new Error("Gemini API error: "+resp.status);
   var json = await resp.json();

@@ -564,27 +564,27 @@ var _lastSyncBefore  = null;    // timestamp snapshot captured at trigger time
 function setUpdateBtnState(state){
   _updateState = state;
   var btn = document.getElementById("updateNowBtn");
-  var lbl = document.getElementById("updateNowLbl");
-  if(!btn || !lbl) return;
-  var msg = UPDATE_MSGS[state] || UPDATE_MSGS.idle;
-  lbl.textContent = msg[lang];
-  btn.classList.toggle("syncing", state==="triggering"||state==="syncing"||state==="longwait");
-  btn.disabled = (state==="triggering"||state==="syncing"||state==="longwait");
-  var iconSpan = btn.querySelector(".spin");
-  // Rebuild icon: spinning while busy, static otherwise
-  var icon = (state==="triggering"||state==="syncing"||state==="longwait") ? '<span class="spin">🔁</span>' : "🔁";
+  if(!btn) return;
+  var msg  = UPDATE_MSGS[state] || UPDATE_MSGS.idle;
+  var busy = (state==="triggering"||state==="syncing"||state==="longwait");
+  var icon = busy ? '<span class="spin">🔁</span>' : "🔁";
+  // Rebuild innerHTML — use a stable inner span id
   btn.innerHTML = icon + ' <span id="updateNowLbl">'+msg[lang]+'</span>';
+  btn.classList.toggle("syncing", busy);
+  btn.disabled = busy;
 }
 
 function triggerManualSync(){
-  if(_updateState==="triggering"||_updateState==="syncing"||_updateState==="longwait") return; // already running
+  if(_updateState==="triggering"||_updateState==="syncing"||_updateState==="longwait") return;
+  if(_pollTimer){ clearInterval(_pollTimer); _pollTimer=null; } // clear any stale timer
+  _pollAttempts = 0;
   setUpdateBtnState("triggering");
 
-  var token = sessionStorage.getItem("gsi_credential") || "";
+  var token  = sessionStorage.getItem("gsi_credential") || "";
   var cbName = "triggerCb_" + Date.now();
 
   window[cbName] = function(json){
-    var s = document.getElementById("_triggerScript");
+    var s = document.getElementById(cbName);
     if(s) s.parentNode.removeChild(s);
     delete window[cbName];
     if(!json || json.error || json.status==="error"){
@@ -593,19 +593,21 @@ function triggerManualSync(){
       setTimeout(function(){ setUpdateBtnState("idle"); }, 4000);
       return;
     }
-    // Workflow triggered successfully — start polling for completion
     setUpdateBtnState("syncing");
     _pollAttempts = 0;
     fetchLastSyncSnapshot(function(beforeTs){
       _lastSyncBefore = beforeTs;
+      if(_pollTimer){ clearInterval(_pollTimer); _pollTimer=null; }
       _pollTimer = setInterval(pollForSyncCompletion, 7000);
     });
   };
 
   var script = document.createElement("script");
-  script.id  = "_triggerScript";
+  script.id  = cbName;
   script.src = APPS_SCRIPT_URL + "?action=trigger_sync&callback=" + cbName + "&token=" + encodeURIComponent(token);
   script.onerror = function(){
+    var s = document.getElementById(cbName);
+    if(s) s.parentNode.removeChild(s);
     delete window[cbName];
     setUpdateBtnState("failed");
     setTimeout(function(){ setUpdateBtnState("idle"); }, 4000);
@@ -613,31 +615,34 @@ function triggerManualSync(){
   document.body.appendChild(script);
 }
 
-// Reads the current last-sync timestamp from Apps Script (may be empty until Meta sheet is wired up)
+// Reads the current last-sync timestamp — unique script ID per call to prevent DOM accumulation
 function fetchLastSyncSnapshot(onResult){
-  var token = sessionStorage.getItem("gsi_credential") || "";
+  var token  = sessionStorage.getItem("gsi_credential") || "";
   var cbName = "lastSyncCb_" + Date.now();
   window[cbName] = function(json){
-    var s = document.getElementById("_lastSyncScript");
+    var s = document.getElementById(cbName);
     if(s) s.parentNode.removeChild(s);
     delete window[cbName];
     var ts = (json && json.status==="ok") ? (json.lastSync||"") : "";
     onResult(ts);
   };
   var script = document.createElement("script");
-  script.id  = "_lastSyncScript";
+  script.id  = cbName;
   script.src = APPS_SCRIPT_URL + "?action=get_last_sync&callback=" + cbName + "&token=" + encodeURIComponent(token);
-  script.onerror = function(){ delete window[cbName]; onResult(""); };
+  script.onerror = function(){
+    var s = document.getElementById(cbName);
+    if(s) s.parentNode.removeChild(s);
+    delete window[cbName];
+    onResult("");
+  };
   document.body.appendChild(script);
 }
 
 function pollForSyncCompletion(){
   _pollAttempts++;
 
-  // Visual nudge after ~3 minutes so the user knows it's still genuinely working, not stuck
   if(_pollAttempts === _pollMaxAttempts) setUpdateBtnState("longwait");
 
-  // Absolute ceiling — stop polling forever if something's gone wrong upstream
   if(_pollAttempts >= _pollHardStop){
     clearInterval(_pollTimer); _pollTimer=null;
     setUpdateBtnState("failed");
@@ -646,21 +651,19 @@ function pollForSyncCompletion(){
   }
 
   fetchLastSyncSnapshot(function(currentTs){
-    // If the Meta sheet / timestamp isn't wired up yet, currentTs stays "" forever —
-    // in that case we can't detect completion, so we fall back to a generous fixed
-    // wait (4 minutes) then just re-fetch data once, rather than polling indefinitely.
     var timestampFeatureActive = !!currentTs;
 
     if(timestampFeatureActive && _lastSyncBefore !== null && currentTs !== _lastSyncBefore){
-      // Timestamp changed — n8n finished, fresh data is in the Sheet
       clearInterval(_pollTimer); _pollTimer=null;
       setUpdateBtnState("done");
-      initDashboardLiveSync(); // re-fetch full dataset
+      initDashboardLiveSync();
       setTimeout(function(){ setUpdateBtnState("idle"); }, 4000);
       return;
     }
 
-    if(!timestampFeatureActive && _pollAttempts >= 34){ // ~4 min fallback when no timestamp wired up
+    // Fallback when Meta sheet timestamp not yet wired up:
+    // After ~4 minutes just re-fetch once and stop polling
+    if(!timestampFeatureActive && _pollAttempts >= 34){
       clearInterval(_pollTimer); _pollTimer=null;
       setUpdateBtnState("done");
       initDashboardLiveSync();
@@ -668,6 +671,7 @@ function pollForSyncCompletion(){
     }
   });
 }
+
 
 // ════════════════════════════════════════════════════
 // DATA PARSING

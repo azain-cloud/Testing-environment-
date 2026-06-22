@@ -1586,89 +1586,131 @@ function smGetData(){
 
 // ── Gemini AI narrative generation ──────────────────────────────
 async function smGenerateNarrative(d, apiKey, rptLang){
-  var isAR = rptLang==="ar";
+  var isAR = rptLang === "ar";
 
-  // Build rich contextual lists for the prompt
-  var atRiskList = d.atRisk.slice(0,5).map(function(r,i){
+  // ── Build rich JSON context for Gemini ──────────────────────────
+  var top10Json = d.top10.map(function(r, i){
     var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
-    var txt  = isAR ? (r.content_ar||r.content_en||"") : (r.content_en||r.content_ar||"");
-    return (i+1)+". \""+txt.substring(0,100)+"\" — "+r.votes+" votes, "+days+" days pending, module: "+r.module;
-  }).join("\n");
-
-  var top5List = d.top10.slice(0,5).map(function(r,i){
-    var txt = isAR ? (r.content_ar||r.content_en||"") : (r.content_en||r.content_ar||"");
-    return (i+1)+". \""+txt.substring(0,100)+"\" — "+r.votes+" votes, module: "+r.module;
-  }).join("\n");
-
-  var modList = d.modules.slice(0,8).map(function(m){
-    var pct = m[1].t ? Math.round((m[1].l/m[1].t)*100) : 0;
-    return "- "+m[0]+": "+m[1].t+" ideas, "+m[1].l+" launched ("+pct+"% launch rate), "+m[1].v+" total votes";
-  }).join("\n");
-
-  // Shared data block — same for both languages
-  var dataBlock = isAR
-    ? ("البيانات:\n"
-      +"- إجمالي الأفكار: "+d.total+" | المُطلقة: "+d.launched+" ("+d.pct+"%) | غير المُطلقة: "+d.nonLaunched+"\n"
-      +"- إجمالي التصويتات: "+d.votes.toLocaleString()+" | متوسط لكل فكرة: "+d.avgV+"\n"
-      +"- أفكار عالية الخطورة (تصويتات ≥20 وعمر ≥90 يوم): "+d.atRisk.length+"\n"
-      +"- أفكار تشمل تصميماً: "+d.designCount+" | UI: "+d.uiCount+" | UX: "+d.uxCount+"\n"
-      +"- الفترة الزمنية: "+d.dateLabel+"\n\n"
-      +"أبرز 5 أفكار بالتصويتات (غير مُطلقة):\n"+top5List+"\n\n"
-      +"أبرز الأفكار عالية الخطورة (تصويت عالٍ + انتظار طويل):\n"+atRiskList+"\n\n"
-      +"توزيع الأفكار حسب الوحدة:\n"+modList)
-    : ("Data:\n"
-      +"- Total ideas: "+d.total+" | Launched: "+d.launched+" ("+d.pct+"%) | Non-launched: "+d.nonLaunched+"\n"
-      +"- Total votes: "+d.votes.toLocaleString()+" | Avg per idea: "+d.avgV+"\n"
-      +"- At-risk ideas (20+ votes AND 90+ days pending): "+d.atRisk.length+"\n"
-      +"- Ideas with design involvement: "+d.designCount+" | UI: "+d.uiCount+" | UX: "+d.uxCount+"\n"
-      +"- Period: "+d.dateLabel+"\n\n"
-      +"Top 5 most-voted non-launched ideas:\n"+top5List+"\n\n"
-      +"Most urgent at-risk ideas:\n"+atRiskList+"\n\n"
-      +"Module breakdown:\n"+modList);
-
-  var prompt = isAR
-    ? ("أنت محلل منتجات أول في شركة رواء، وهي شركة B2B SaaS سعودية لإدارة نقاط البيع والمخزون والمحاسبة."
-      +"\nمهمتك: كتابة ملخص تنفيذي صريح وعميق باللغة العربية، موجّه لفريق القيادة (CPO, CEO, VP Product)."
-      +"\n\nقواعد صارمة:"
-      +"\n- كن صريحاً وموضوعياً. لا مجاملة ولا تلطيف للحقائق."
-      +"\n- إذا كانت الأرقام تكشف إشكالية، سمّها بوضوح."
-      +"\n- لا تعيد سرد الأرقام فقط — فسّرها وأخرج منها رؤى قابلة للتنفيذ."
-      +"\n- لا عناوين، لا نقاط — فقط نثر سردي متدفق."
-      +"\n- الأسلوب: رسمي، مباشر، ومليء بالعمق التحليلي."
-      +"\n\n"+dataBlock
-      +"\n\nاكتب 5 فقرات متدفقة بعمق متساوٍ:"
-      +"\n\nالفقرة الأولى — الصورة الكبيرة: ماذا تقول هذه البيانات عن واقع العلاقة بين المنتج واحتياجات العملاء؟ أين يتركّز الألم؟ هل معدل الإطلاق يعكس استجابة كافية للطلب؟ كن صريحاً."
-      +"\n\nالفقرة الثانية — الأفكار الأعلى تأثيراً: ماذا يطلب العملاء فعلاً؟ هل هناك نمط مشترك أو حاجة أعمق تختبئ خلف هذه الأفكار؟ ما الذي يكشفه تركّز التصويتات عن أولويات السوق؟"
-      +"\n\nالفقرة الثالثة — الأفكار عالية الخطورة: ناقش الأفكار التي جمعت بين تصويت عالٍ وانتظار طويل — ما الخطر الفعلي على رضا العملاء وولائهم إن استمر التجاهل؟ أي وحدات تحتاج قراراً فورياً؟ لا تُهوّن من الأمر."
-      +"\n\nالفقرة الرابعة — تحليل الوحدات: أي الوحدات تستقطب أعلى حجم من الطلب وتعاني من أدنى معدل إطلاق؟ أين الفجوة الأكبر بين ما يريده العملاء وما يُقدّمه المنتج؟ أي وحدات تُهمَل رغم ثقلها التصويتي؟"
-      +"\n\nالفقرة الخامسة — التوصية التنفيذية: توصية واحدة محددة وقابلة للتنفيذ هذا الأسبوع — ما الإجراء الأكثر تأثيراً الذي يمكن لقيادة المنتج اتخاذه الآن بناءً على هذه البيانات؟")
-    : ("You are a senior product analyst at Rewaa, a Saudi B2B SaaS company for POS, inventory, and accounting."
-      +"\nYour task: write a direct, honest, and deeply insightful executive summary in English for C-level leadership (CPO, CEO, VP Product)."
-      +"\n\nStrict rules:"
-      +"\n- Be honest and objective. Do not sugarcoat findings or praise the product."
-      +"\n- If the data reveals a problem, name it clearly."
-      +"\n- Do NOT restate numbers — interpret them and extract real insights."
-      +"\n- No headings, no bullet points — flowing narrative prose only."
-      +"\n- Tone: formal, direct, analytically rigorous."
-      +"\n\n"+dataBlock
-      +"\n\nWrite 5 paragraphs of equal depth and analytical rigour:"
-      +"\n\nParagraph 1 — The Big Picture: What do these patterns reveal about the relationship between the product and customer needs? Where is pain concentrated? Does the launch rate reflect adequate responsiveness to demand? Be direct — if the numbers point to a gap, say so."
-      +"\n\nParagraph 2 — High-Impact Ideas: What are customers actually asking for? Is there a recurring theme or deeper unmet need behind these top ideas? What does the concentration of votes signal about market priorities and product gaps?"
-      +"\n\nParagraph 3 — At-Risk Ideas: Discuss ideas that combine high votes with long wait times — what is the real risk to customer satisfaction and retention if these continue to be delayed? Which modules need an immediate decision? Do not downplay the urgency."
-      +"\n\nParagraph 4 — Module Analysis: Which modules attract the highest demand but have the lowest launch rate? Where is the widest gap between what customers want and what the product delivers? Which modules are being neglected despite strong vote signals?"
-      +"\n\nParagraph 5 — Executive Recommendation: One specific, actionable recommendation leadership can act on this week — the single highest-impact move the product team can make right now based on this data.");
-
-  var resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="+apiKey,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({
-      contents:[{parts:[{text:prompt}]}],
-      generationConfig:{temperature:0.5,maxOutputTokens:1400}
-    })
+    return {
+      rank: i+1,
+      idea: (r.content_en || r.content_ar || "").substring(0, 160),
+      votes: r.votes,
+      module: r.module,
+      status: r.status,
+      days_pending: days
+    };
   });
-  if(!resp.ok) throw new Error("Gemini API error: "+resp.status);
-  var json = await resp.json();
-  return json.candidates[0].content.parts[0].text.trim();
+
+  var atRiskJson = d.atRisk.map(function(r){
+    var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
+    return {
+      idea: (r.content_en || r.content_ar || "").substring(0, 160),
+      votes: r.votes,
+      module: r.module,
+      days_pending: days
+    };
+  });
+
+  var modulesJson = d.modules.slice(0, 9).map(function(m){
+    var launchRate = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
+    return {
+      module: m[0],
+      total_ideas: m[1].t,
+      launched: m[1].l,
+      non_launched: m[1].t - m[1].l,
+      launch_rate_pct: launchRate,
+      total_votes: m[1].v
+    };
+  });
+
+  var contextJson = {
+    summary_stats: {
+      total_ideas: d.total,
+      launched: d.launched,
+      non_launched: d.nonLaunched,
+      launch_rate_pct: parseFloat(d.pct),
+      total_votes: d.votes,
+      avg_votes_per_idea: parseFloat(d.avgV),
+      at_risk_count: d.atRisk.length,
+      design_involvement: d.designCount,
+      ui_ideas: d.uiCount,
+      ux_ideas: d.uxCount,
+      period: d.dateLabel
+    },
+    top_10_non_launched_by_votes: top10Json,
+    at_risk_ideas: atRiskJson,
+    module_breakdown: modulesJson
+  };
+
+  var dataStr = JSON.stringify(contextJson, null, 2);
+
+  // ── English analytical prompt ────────────────────────────────────
+  var enPrompt = "You are a senior product analyst at Rewaa, a Saudi B2B SaaS company for POS, inventory, and accounting used by merchants across Saudi Arabia.\n\n"
+    + "Your task: write a direct, honest, and analytically rigorous executive summary for C-level leadership (CPO, CEO, VP Product).\n\n"
+    + "STRICT RULES:\n"
+    + "- Be honest. Do NOT sugarcoat, do NOT praise the product, do NOT soften findings.\n"
+    + "- If the data reveals gaps, delays, or neglect — name them directly.\n"
+    + "- Do NOT restate numbers from the JSON. Interpret them. Extract meaning.\n"
+    + "- Read the actual idea text and identify the real customer pain behind it — not just the feature request.\n"
+    + "- No bullet points. No headings. Flowing narrative prose only.\n"
+    + "- Write 5 paragraphs. Each must be substantive — minimum 4 sentences.\n\n"
+    + "DATA:\n" + dataStr + "\n\n"
+    + "PARAGRAPH INSTRUCTIONS:\n\n"
+    + "Paragraph 1 — Overall Assessment: What does the overall picture say about how well the product is serving its customers? "
+    + "A " + d.pct + "% launch rate against " + d.total + " ideas — is that acceptable? "
+    + "What does the vote distribution and average engagement tell you about customer frustration or satisfaction? "
+    + "Be direct about what the numbers mean.\n\n"
+    + "Paragraph 2 — Top 10 Ideas Deep Dive: Read the actual idea text in top_10_non_launched_by_votes. "
+    + "Do not just list them — analyse what customers are really asking for underneath these requests. "
+    + "What business problems are they trying to solve? What does the pattern across these ideas reveal about product gaps? "
+    + "How would solving the top 3–5 most-voted ideas concretely improve merchant operations and Rewaa's competitiveness?\n\n"
+    + "Paragraph 3 — At-Risk Ideas — Urgency Assessment: Read at_risk_ideas carefully. "
+    + "These ideas have 20+ votes AND have been waiting 90+ days. "
+    + "What is the real cost of continued inaction — in customer trust, churn risk, and competitive exposure? "
+    + "Which modules are most exposed? Do not soften this — if these represent a retention risk, say so.\n\n"
+    + "Paragraph 4 — Module Analysis: Look at module_breakdown. "
+    + "Which modules have the highest unmet demand (high non-launched ideas, high votes, low launch rate)? "
+    + "Which modules are being underserved relative to how much customers care about them? "
+    + "Where is the product team's attention misaligned with what the market is asking for?\n\n"
+    + "Paragraph 5 — Executive Recommendation: Based on everything above, give one specific, high-impact recommendation "
+    + "that the CPO or CEO could act on this week. Name the module, name the problem, name the expected outcome. "
+    + "This should feel like advice from a trusted advisor, not a consultant report filler.";
+
+  // ── Call Gemini for English analysis ────────────────────────────
+  async function callGemini(promptText){
+    var resp = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + apiKey,
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          contents: [{parts: [{text: promptText}]}],
+          generationConfig: {temperature: 0.5, maxOutputTokens: 1600}
+        })
+      }
+    );
+    if(!resp.ok) throw new Error("Gemini API error: " + resp.status);
+    var json = await resp.json();
+    return json.candidates[0].content.parts[0].text.trim();
+  }
+
+  // Generate English narrative first (always)
+  var enNarrative = await callGemini(enPrompt);
+
+  // If Arabic selected, translate the English output — same depth, just translated
+  if(isAR){
+    var translatePrompt = "You are a professional Arabic translator specialising in formal business and technology content.\n\n"
+      + "Translate the following executive summary from English to formal Arabic (Modern Standard Arabic / اللغة العربية الفصحى).\n\n"
+      + "RULES:\n"
+      + "- Preserve the full meaning, tone, and directness of the original. Do not soften or add praise.\n"
+      + "- Maintain the 5-paragraph structure. Keep flowing prose — no bullets, no headings.\n"
+      + "- Use natural business Arabic — the audience is C-level executives in a Saudi tech company.\n"
+      + "- Do not translate proper nouns (Rewaa, POS, etc.).\n\n"
+      + "TEXT TO TRANSLATE:\n" + enNarrative;
+    return await callGemini(translatePrompt);
+  }
+
+  return enNarrative;
 }
 
 // ── Build the HTML report for preview ───────────────────────────

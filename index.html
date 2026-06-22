@@ -1605,11 +1605,60 @@ async function smGenerateNarrative(d, apiKey, rptLang){
     return "- "+m[0]+": "+m[1].t+" ideas, "+m[1].l+" launched ("+pct+"% launch rate), "+m[1].v+" total votes";
   }).join("\n");
 
-  var prompt = isAR
-    ? "أنت محلل منتجات أول في شركة رواء (B2B SaaS سعودية). اكتب ملخصاً تنفيذياً احترافياً وعميقاً باللغة العربية موجهاً للقيادة التنفيذية. لا تكتفِ بسرد الأرقام — حللها واستخرج رؤى قابلة للتنفيذ.\n\nالبيانات:\n- إجمالي الأفكار: "+d.total+" | المُطلقة: "+d.launched+" ("+d.pct+"%) | غير المُطلقة: "+d.nonLaunched+"\n- إجمالي التصويتات: "+d.votes+" | متوسط: "+d.avgV+"\n- أفكار عالية الخطورة: "+d.atRisk.length+"\n- التصميم: "+d.designCount+" | UI: "+d.uiCount+" | UX: "+d.uxCount+"\n- الفترة: "+d.dateLabel+"\n\nأبرز 5 أفكار بالتصويتات:\n"+top5List+"\n\nأفكار عالية الخطورة (أكثر إلحاحاً):\n"+atRiskList+"\n\nتوزيع الوحدات:\n"+modList+"\n\nاكتب 5 فقرات نثرية متدفقة (بدون عناوين أو نقاط):\n1. فقرة تنفيذية شاملة: الصورة الكبيرة، أين يتركّز الألم، مستوى استجابة المنتج\n2. الأفكار الأعلى تأثيراً: ما يطلبه العملاء فعلاً والأنماط المشتركة\n3. الأفكار عالية الخطورة: مخاطر التأخير والوحدات التي تحتاج تدخلاً فورياً\n4. تحليل الوحدات: الفجوات بين الطلب ومعدل الإطلاق والفرص غير المستغلة\n5. توصية تنفيذية واحدة واضحة وقابلة للتنفيذ هذا الأسبوع"
-    : "You are a senior product analyst at Rewaa, a Saudi B2B SaaS company. Write a rich, insightful executive summary in English for C-level leadership. Do NOT restate numbers — analyse them and extract actionable intelligence.\n\nData:\n- Total ideas: "+d.total+" | Launched: "+d.launched+" ("+d.pct+"%) | Non-launched: "+d.nonLaunched+"\n- Total votes: "+d.votes+" | Avg per idea: "+d.avgV+"\n- At-risk ideas (20+ votes, 90+ days pending): "+d.atRisk.length+"\n- Design: "+d.designCount+" | UI: "+d.uiCount+" | UX: "+d.uxCount+"\n- Period: "+d.dateLabel+"\n\nTop 5 most-voted non-launched ideas:\n"+top5List+"\n\nMost urgent at-risk ideas:\n"+atRiskList+"\n\nModule breakdown:\n"+modList+"\n\nWrite 5 flowing narrative paragraphs (no headings, no bullets):\n1. Opening executive paragraph: Connect patterns to the bigger picture — where is customer pain concentrated? How responsive has the product been?\n2. High-impact ideas: What are customers actually asking for? What common theme or unmet need do the top ideas reveal?\n3. At-risk ideas: What is the customer satisfaction risk of continued delay? Which modules need immediate action and why?\n4. Module analysis: Where is the gap between customer demand and launch rate? Where are the biggest untapped opportunities?\n5. One clear, specific, actionable recommendation a CPO or CEO could act on this week.";
+  // Shared data block — same for both languages
+  var dataBlock = isAR
+    ? ("البيانات:\n"
+      +"- إجمالي الأفكار: "+d.total+" | المُطلقة: "+d.launched+" ("+d.pct+"%) | غير المُطلقة: "+d.nonLaunched+"\n"
+      +"- إجمالي التصويتات: "+d.votes.toLocaleString()+" | متوسط لكل فكرة: "+d.avgV+"\n"
+      +"- أفكار عالية الخطورة (تصويتات ≥20 وعمر ≥90 يوم): "+d.atRisk.length+"\n"
+      +"- أفكار تشمل تصميماً: "+d.designCount+" | UI: "+d.uiCount+" | UX: "+d.uxCount+"\n"
+      +"- الفترة الزمنية: "+d.dateLabel+"\n\n"
+      +"أبرز 5 أفكار بالتصويتات (غير مُطلقة):\n"+top5List+"\n\n"
+      +"أبرز الأفكار عالية الخطورة (تصويت عالٍ + انتظار طويل):\n"+atRiskList+"\n\n"
+      +"توزيع الأفكار حسب الوحدة:\n"+modList)
+    : ("Data:\n"
+      +"- Total ideas: "+d.total+" | Launched: "+d.launched+" ("+d.pct+"%) | Non-launched: "+d.nonLaunched+"\n"
+      +"- Total votes: "+d.votes.toLocaleString()+" | Avg per idea: "+d.avgV+"\n"
+      +"- At-risk ideas (20+ votes AND 90+ days pending): "+d.atRisk.length+"\n"
+      +"- Ideas with design involvement: "+d.designCount+" | UI: "+d.uiCount+" | UX: "+d.uxCount+"\n"
+      +"- Period: "+d.dateLabel+"\n\n"
+      +"Top 5 most-voted non-launched ideas:\n"+top5List+"\n\n"
+      +"Most urgent at-risk ideas:\n"+atRiskList+"\n\n"
+      +"Module breakdown:\n"+modList);
 
-  var resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key="+apiKey,{
+  var prompt = isAR
+    ? ("أنت محلل منتجات أول في شركة رواء، وهي شركة B2B SaaS سعودية لإدارة نقاط البيع والمخزون والمحاسبة."
+      +"\nمهمتك: كتابة ملخص تنفيذي صريح وعميق باللغة العربية، موجّه لفريق القيادة (CPO, CEO, VP Product)."
+      +"\n\nقواعد صارمة:"
+      +"\n- كن صريحاً وموضوعياً. لا مجاملة ولا تلطيف للحقائق."
+      +"\n- إذا كانت الأرقام تكشف إشكالية، سمّها بوضوح."
+      +"\n- لا تعيد سرد الأرقام فقط — فسّرها وأخرج منها رؤى قابلة للتنفيذ."
+      +"\n- لا عناوين، لا نقاط — فقط نثر سردي متدفق."
+      +"\n- الأسلوب: رسمي، مباشر، ومليء بالعمق التحليلي."
+      +"\n\n"+dataBlock
+      +"\n\nاكتب 5 فقرات متدفقة بعمق متساوٍ:"
+      +"\n\nالفقرة الأولى — الصورة الكبيرة: ماذا تقول هذه البيانات عن واقع العلاقة بين المنتج واحتياجات العملاء؟ أين يتركّز الألم؟ هل معدل الإطلاق يعكس استجابة كافية للطلب؟ كن صريحاً."
+      +"\n\nالفقرة الثانية — الأفكار الأعلى تأثيراً: ماذا يطلب العملاء فعلاً؟ هل هناك نمط مشترك أو حاجة أعمق تختبئ خلف هذه الأفكار؟ ما الذي يكشفه تركّز التصويتات عن أولويات السوق؟"
+      +"\n\nالفقرة الثالثة — الأفكار عالية الخطورة: ناقش الأفكار التي جمعت بين تصويت عالٍ وانتظار طويل — ما الخطر الفعلي على رضا العملاء وولائهم إن استمر التجاهل؟ أي وحدات تحتاج قراراً فورياً؟ لا تُهوّن من الأمر."
+      +"\n\nالفقرة الرابعة — تحليل الوحدات: أي الوحدات تستقطب أعلى حجم من الطلب وتعاني من أدنى معدل إطلاق؟ أين الفجوة الأكبر بين ما يريده العملاء وما يُقدّمه المنتج؟ أي وحدات تُهمَل رغم ثقلها التصويتي؟"
+      +"\n\nالفقرة الخامسة — التوصية التنفيذية: توصية واحدة محددة وقابلة للتنفيذ هذا الأسبوع — ما الإجراء الأكثر تأثيراً الذي يمكن لقيادة المنتج اتخاذه الآن بناءً على هذه البيانات؟")
+    : ("You are a senior product analyst at Rewaa, a Saudi B2B SaaS company for POS, inventory, and accounting."
+      +"\nYour task: write a direct, honest, and deeply insightful executive summary in English for C-level leadership (CPO, CEO, VP Product)."
+      +"\n\nStrict rules:"
+      +"\n- Be honest and objective. Do not sugarcoat findings or praise the product."
+      +"\n- If the data reveals a problem, name it clearly."
+      +"\n- Do NOT restate numbers — interpret them and extract real insights."
+      +"\n- No headings, no bullet points — flowing narrative prose only."
+      +"\n- Tone: formal, direct, analytically rigorous."
+      +"\n\n"+dataBlock
+      +"\n\nWrite 5 paragraphs of equal depth and analytical rigour:"
+      +"\n\nParagraph 1 — The Big Picture: What do these patterns reveal about the relationship between the product and customer needs? Where is pain concentrated? Does the launch rate reflect adequate responsiveness to demand? Be direct — if the numbers point to a gap, say so."
+      +"\n\nParagraph 2 — High-Impact Ideas: What are customers actually asking for? Is there a recurring theme or deeper unmet need behind these top ideas? What does the concentration of votes signal about market priorities and product gaps?"
+      +"\n\nParagraph 3 — At-Risk Ideas: Discuss ideas that combine high votes with long wait times — what is the real risk to customer satisfaction and retention if these continue to be delayed? Which modules need an immediate decision? Do not downplay the urgency."
+      +"\n\nParagraph 4 — Module Analysis: Which modules attract the highest demand but have the lowest launch rate? Where is the widest gap between what customers want and what the product delivers? Which modules are being neglected despite strong vote signals?"
+      +"\n\nParagraph 5 — Executive Recommendation: One specific, actionable recommendation leadership can act on this week — the single highest-impact move the product team can make right now based on this data.");
+
+  var resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="+apiKey,{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({

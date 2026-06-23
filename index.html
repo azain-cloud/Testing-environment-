@@ -1575,91 +1575,51 @@ function smGetData(){
 
 // ── Gemini AI narrative generation ──────────────────────────────
 async function smGenerateNarrative(d, rptLang){
-  return new Promise(function(resolve, reject){
-    var token  = sessionStorage.getItem("gsi_credential") || "";
-    var cbName = "summaryCb_" + Date.now();
-
-    // Build payload — this goes to Apps Script which proxies to n8n
-    // Keep payload compact to stay within URL length limits (~4KB encoded)
-    // Use content_en as primary (n8n handles translation), truncate to 100 chars
-    var top10Payload = d.top10.map(function(r){
-      var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
-      return {
-        i: (r.content_en || r.content_ar || "").substring(0, 100),
-        v: r.votes,
-        m: r.module,
-        d: days
-      };
-    });
-
-    var atRiskPayload = d.atRisk.map(function(r){
-      var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
-      return {
-        i: (r.content_en || r.content_ar || "").substring(0, 100),
-        v: r.votes,
-        m: r.module,
-        d: days
-      };
-    });
-
-    var modulesPayload = d.modules.slice(0, 9).map(function(m){
-      var lr = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
-      return { m: m[0], t: m[1].t, l: m[1].l, lr: lr, v: m[1].v };
-    });
-
-    var payloadObj = {
-      lang: rptLang,
-      s: {
-        t:   d.total,
-        l:   d.launched,
-        nl:  d.nonLaunched,
-        lr:  parseFloat(d.pct),
-        tv:  d.votes,
-        av:  parseFloat(d.avgV),
-        ar:  d.atRisk.length,
-        dc:  d.designCount,
-        ui:  d.uiCount,
-        ux:  d.uxCount,
-        p:   d.dateLabel
-      },
-      t10: top10Payload,
-      risk: atRiskPayload,
-      mod:  modulesPayload
-    };
-
-    window[cbName] = function(json){
-      var s = document.getElementById(cbName);
-      if(s) s.parentNode.removeChild(s);
-      delete window[cbName];
-      if(!json || json.error){
-        reject(new Error(json ? json.error : "No response from Apps Script"));
-        return;
-      }
-      if(!json.narrative){
-        reject(new Error("Apps Script response missing narrative field"));
-        return;
-      }
-      resolve(json.narrative);
-    };
-
-    var script = document.createElement("script");
-    script.id  = cbName;
-    // Pass payload as URL-encoded JSON — Apps Script reads e.parameter.payload
-    script.src = APPS_SCRIPT_URL
-      + "?action=get_summary"
-      + "&callback=" + cbName
-      + "&token="   + encodeURIComponent(token)
-      + "&payload=" + encodeURIComponent(JSON.stringify(payloadObj));
-
-    script.onerror = function(){
-      var s = document.getElementById(cbName);
-      if(s) s.parentNode.removeChild(s);
-      delete window[cbName];
-      reject(new Error("Apps Script request failed — check deployment"));
-    };
-
-    document.body.appendChild(script);
+  var token = sessionStorage.getItem("gsi_credential") || "";
+  
+  var top10Payload = d.top10.map(function(r){
+    var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
+    return { i: (r.content_en || r.content_ar || "").substring(0, 100), v: r.votes, m: r.module, d: days };
   });
+
+  var atRiskPayload = d.atRisk.map(function(r){
+    var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
+    return { i: (r.content_en || r.content_ar || "").substring(0, 100), v: r.votes, m: r.module, d: days };
+  });
+
+  var modulesPayload = d.modules.slice(0, 9).map(function(m){
+    var lr = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
+    return { m: m[0], t: m[1].t, l: m[1].l, lr: lr, v: m[1].v };
+  });
+
+  var payloadObj = {
+    lang: rptLang,
+    s: { t: d.total, l: d.launched, nl: d.nonLaunched, lr: parseFloat(d.pct), tv: d.votes, av: parseFloat(d.avgV), ar: d.atRisk.length, dc: d.designCount, ui: d.uiCount, ux: d.uxCount, p: d.dateLabel },
+    t10: top10Payload,
+    risk: atRiskPayload,
+    mod:  modulesPayload
+  };
+
+  const response = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    mode: "cors",
+    body: JSON.stringify({
+      token: token,
+      action: "get_summary",
+      payload: payloadObj
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("Apps Script endpoint responded with a network error status.");
+  }
+
+  var json = await response.json();
+  if (json.error) {
+    throw new Error(json.error);
+  }
+  
+  return json.narrative;
 }
 
 

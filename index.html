@@ -1580,59 +1580,51 @@ async function smGenerateNarrative(d, rptLang){
     var cbName = "summaryCb_" + Date.now();
 
     // Build payload — this goes to Apps Script which proxies to n8n
+    // Keep payload compact to stay within URL length limits (~4KB encoded)
+    // Use content_en as primary (n8n handles translation), truncate to 100 chars
     var top10Payload = d.top10.map(function(r){
       var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
       return {
-        idea:         (r.content_en || r.content_ar || "").substring(0, 200),
-        idea_ar:      (r.content_ar || "").substring(0, 200),
-        votes:        r.votes,
-        module:       r.module,
-        status:       r.status,
-        days_pending: days
+        i: (r.content_en || r.content_ar || "").substring(0, 100),
+        v: r.votes,
+        m: r.module,
+        d: days
       };
     });
 
     var atRiskPayload = d.atRisk.map(function(r){
       var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
       return {
-        idea:         (r.content_en || r.content_ar || "").substring(0, 200),
-        idea_ar:      (r.content_ar || "").substring(0, 200),
-        votes:        r.votes,
-        module:       r.module,
-        days_pending: days
+        i: (r.content_en || r.content_ar || "").substring(0, 100),
+        v: r.votes,
+        m: r.module,
+        d: days
       };
     });
 
     var modulesPayload = d.modules.slice(0, 9).map(function(m){
-      var launchRate = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
-      return {
-        module:          m[0],
-        total_ideas:     m[1].t,
-        launched:        m[1].l,
-        non_launched:    m[1].t - m[1].l,
-        launch_rate_pct: launchRate,
-        total_votes:     m[1].v
-      };
+      var lr = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
+      return { m: m[0], t: m[1].t, l: m[1].l, lr: lr, v: m[1].v };
     });
 
     var payloadObj = {
-      lang:  rptLang,
-      stats: {
-        total_ideas:     d.total,
-        launched:        d.launched,
-        non_launched:    d.nonLaunched,
-        launch_rate_pct: parseFloat(d.pct),
-        total_votes:     d.votes,
-        avg_votes:       parseFloat(d.avgV),
-        at_risk_count:   d.atRisk.length,
-        design_count:    d.designCount,
-        ui_count:        d.uiCount,
-        ux_count:        d.uxCount,
-        period:          d.dateLabel
+      lang: rptLang,
+      s: {
+        t:   d.total,
+        l:   d.launched,
+        nl:  d.nonLaunched,
+        lr:  parseFloat(d.pct),
+        tv:  d.votes,
+        av:  parseFloat(d.avgV),
+        ar:  d.atRisk.length,
+        dc:  d.designCount,
+        ui:  d.uiCount,
+        ux:  d.uxCount,
+        p:   d.dateLabel
       },
-      top_10_non_launched: top10Payload,
-      at_risk_ideas:       atRiskPayload,
-      module_breakdown:    modulesPayload
+      t10: top10Payload,
+      risk: atRiskPayload,
+      mod:  modulesPayload
     };
 
     window[cbName] = function(json){

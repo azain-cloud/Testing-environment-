@@ -405,7 +405,6 @@ body.ltr .ms-drop{right:auto;left:0}
 // CONFIG
 // ════════════════════════════════════════════════════
 var APPS_SCRIPT_URL      = "https://script.google.com/a/macros/rewaa.com/s/AKfycbyvj2fDlZ7_jf1hfvqCMkOauoqyMOTmB8aqAju4I2kS5gg_IyzIhPhFxhvxG0a_h_zaIA/exec";
-var N8N_SUMMARY_WEBHOOK  = "PASTE_YOUR_N8N_SUMMARY_WEBHOOK_URL_HERE";
 var GOOGLE_CLIENT_ID     = "11249982937-ru4m3a85dkr6a7errjlj5hcljoujmr18.apps.googleusercontent.com";
 var ALLOWED_LOGIN_DOMAIN = "rewaa.com";
 var DATE_MIN             = "2022-10-27";
@@ -1576,80 +1575,99 @@ function smGetData(){
 
 // ── Gemini AI narrative generation ──────────────────────────────
 async function smGenerateNarrative(d, rptLang){
-  // Build the payload — top10 ideas + at-risk ideas + lang + auth token
-  var token = sessionStorage.getItem("gsi_credential") || "";
+  return new Promise(function(resolve, reject){
+    var token  = sessionStorage.getItem("gsi_credential") || "";
+    var cbName = "summaryCb_" + Date.now();
 
-  var top10Payload = d.top10.map(function(r){
-    var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
-    return {
-      idea:         (r.content_en || r.content_ar || "").substring(0, 200),
-      idea_ar:      (r.content_ar || "").substring(0, 200),
-      votes:        r.votes,
-      module:       r.module,
-      status:       r.status,
-      days_pending: days
+    // Build payload — this goes to Apps Script which proxies to n8n
+    var top10Payload = d.top10.map(function(r){
+      var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
+      return {
+        idea:         (r.content_en || r.content_ar || "").substring(0, 200),
+        idea_ar:      (r.content_ar || "").substring(0, 200),
+        votes:        r.votes,
+        module:       r.module,
+        status:       r.status,
+        days_pending: days
+      };
+    });
+
+    var atRiskPayload = d.atRisk.map(function(r){
+      var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
+      return {
+        idea:         (r.content_en || r.content_ar || "").substring(0, 200),
+        idea_ar:      (r.content_ar || "").substring(0, 200),
+        votes:        r.votes,
+        module:       r.module,
+        days_pending: days
+      };
+    });
+
+    var modulesPayload = d.modules.slice(0, 9).map(function(m){
+      var launchRate = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
+      return {
+        module:          m[0],
+        total_ideas:     m[1].t,
+        launched:        m[1].l,
+        non_launched:    m[1].t - m[1].l,
+        launch_rate_pct: launchRate,
+        total_votes:     m[1].v
+      };
+    });
+
+    var payloadObj = {
+      lang:  rptLang,
+      stats: {
+        total_ideas:     d.total,
+        launched:        d.launched,
+        non_launched:    d.nonLaunched,
+        launch_rate_pct: parseFloat(d.pct),
+        total_votes:     d.votes,
+        avg_votes:       parseFloat(d.avgV),
+        at_risk_count:   d.atRisk.length,
+        design_count:    d.designCount,
+        ui_count:        d.uiCount,
+        ux_count:        d.uxCount,
+        period:          d.dateLabel
+      },
+      top_10_non_launched: top10Payload,
+      at_risk_ideas:       atRiskPayload,
+      module_breakdown:    modulesPayload
     };
-  });
 
-  var atRiskPayload = d.atRisk.map(function(r){
-    var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
-    return {
-      idea:         (r.content_en || r.content_ar || "").substring(0, 200),
-      idea_ar:      (r.content_ar || "").substring(0, 200),
-      votes:        r.votes,
-      module:       r.module,
-      days_pending: days
+    window[cbName] = function(json){
+      var s = document.getElementById(cbName);
+      if(s) s.parentNode.removeChild(s);
+      delete window[cbName];
+      if(!json || json.error){
+        reject(new Error(json ? json.error : "No response from Apps Script"));
+        return;
+      }
+      if(!json.narrative){
+        reject(new Error("Apps Script response missing narrative field"));
+        return;
+      }
+      resolve(json.narrative);
     };
-  });
 
-  var modulesPayload = d.modules.slice(0, 9).map(function(m){
-    var launchRate = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
-    return {
-      module:          m[0],
-      total_ideas:     m[1].t,
-      launched:        m[1].l,
-      non_launched:    m[1].t - m[1].l,
-      launch_rate_pct: launchRate,
-      total_votes:     m[1].v
+    var script = document.createElement("script");
+    script.id  = cbName;
+    // Pass payload as URL-encoded JSON — Apps Script reads e.parameter.payload
+    script.src = APPS_SCRIPT_URL
+      + "?action=get_summary"
+      + "&callback=" + cbName
+      + "&token="   + encodeURIComponent(token)
+      + "&payload=" + encodeURIComponent(JSON.stringify(payloadObj));
+
+    script.onerror = function(){
+      var s = document.getElementById(cbName);
+      if(s) s.parentNode.removeChild(s);
+      delete window[cbName];
+      reject(new Error("Apps Script request failed — check deployment"));
     };
+
+    document.body.appendChild(script);
   });
-
-  var payload = {
-    lang:    rptLang,
-    token:   token,
-    stats: {
-      total_ideas:      d.total,
-      launched:         d.launched,
-      non_launched:     d.nonLaunched,
-      launch_rate_pct:  parseFloat(d.pct),
-      total_votes:      d.votes,
-      avg_votes:        parseFloat(d.avgV),
-      at_risk_count:    d.atRisk.length,
-      design_count:     d.designCount,
-      ui_count:         d.uiCount,
-      ux_count:         d.uxCount,
-      period:           d.dateLabel
-    },
-    top_10_non_launched: top10Payload,
-    at_risk_ideas:       atRiskPayload,
-    module_breakdown:    modulesPayload
-  };
-
-  // POST to n8n — n8n responds when AI generation is complete
-  var resp = await fetch(N8N_SUMMARY_WEBHOOK, {
-    method:  "POST",
-    headers: {"Content-Type": "application/json"},
-    body:    JSON.stringify(payload)
-  });
-
-  if(!resp.ok) throw new Error("n8n webhook error: " + resp.status);
-
-  var json = await resp.json();
-
-  // n8n should return { narrative: "..." }
-  if(!json.narrative) throw new Error("n8n response missing narrative field");
-
-  return json.narrative;
 }
 
 
@@ -1746,10 +1764,6 @@ function smBuildReportHTML(d, narrative, cxComments){
 async function generateSummaryReport(){
   var cx = document.getElementById("smCxComments").value||"";
   if(RAW.length===0){ smSetStatus("No data loaded yet","error"); return; }
-  if(!N8N_SUMMARY_WEBHOOK || N8N_SUMMARY_WEBHOOK.indexOf("PASTE_") === 0){
-    smSetStatus("Summary webhook URL not configured","error"); return;
-  }
-
   smSaveSettings();
   var d = smGetData();
 

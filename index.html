@@ -1602,11 +1602,10 @@ async function smGenerateNarrative(d, rptLang){
 
   const response = await fetch(APPS_SCRIPT_URL, {
     method: "POST",
-    mode: "cors",
-    body: JSON.stringify({
+    body: new URLSearchParams({
       token: token,
       action: "get_summary",
-      payload: payloadObj
+      payload: JSON.stringify(payloadObj)
     })
   });
 
@@ -1621,7 +1620,6 @@ async function smGenerateNarrative(d, rptLang){
   
   return json.narrative;
 }
-
 
 // ── Build the HTML report for preview ───────────────────────────
 function smBuildReportHTML(d, narrative, cxComments){

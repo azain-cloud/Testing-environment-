@@ -405,6 +405,7 @@ body.ltr .ms-drop{right:auto;left:0}
 // CONFIG
 // ════════════════════════════════════════════════════
 var APPS_SCRIPT_URL      = "https://script.google.com/a/macros/rewaa.com/s/AKfycbyvj2fDlZ7_jf1hfvqCMkOauoqyMOTmB8aqAju4I2kS5gg_IyzIhPhFxhvxG0a_h_zaIA/exec";
+var N8N_SUMMARY_WEBHOOK  = "PASTE_YOUR_N8N_SUMMARY_WEBHOOK_URL_HERE";
 var GOOGLE_CLIENT_ID     = "11249982937-ru4m3a85dkr6a7errjlj5hcljoujmr18.apps.googleusercontent.com";
 var ALLOWED_LOGIN_DOMAIN = "rewaa.com";
 var DATE_MIN             = "2022-10-27";
@@ -1294,14 +1295,6 @@ function openLink(el){var url=el.getAttribute("data-href");if(url&&url!=="#")win
         </div>
       </div>
 
-      <!-- Gemini API Key -->
-      <div class="sm-divider"></div>
-      <div style="padding:12px 20px">
-        <label class="sm-opt-label" id="smApiKeyLabel">Gemini API Key</label>
-        <input type="password" class="sm-input sm-apikey" id="smApiKey" placeholder="AIza...">
-        <div style="font-size:10px;color:#8F959B;margin-top:5px" id="smApiKeyHint">Get a free key at aistudio.google.com</div>
-      </div>
-
       <!-- CX Comments (optional) -->
       <div class="sm-divider"></div>
       <div style="padding:12px 20px 4px">
@@ -1392,15 +1385,12 @@ function closeSummaryModal(){
   SM._configLoading = false; // reset so next open fetches fresh
 }
 
-// ── Settings: API key + language persist in localStorage (device-only, fine) ─
+// ── Settings: language persists in localStorage ──────────────────
 function smRestoreSettings(){
-  var key = localStorage.getItem("smApiKey")||"";
-  document.getElementById("smApiKey").value = key;
   document.getElementById("smLangSel").value = localStorage.getItem("smLang")||"en";
 }
 function smSaveSettings(){
-  localStorage.setItem("smApiKey", document.getElementById("smApiKey").value.trim());
-  localStorage.setItem("smLang",   document.getElementById("smLangSel").value);
+  localStorage.setItem("smLang", document.getElementById("smLangSel").value);
 }
 
 function smToggleDatePicker(){
@@ -1585,133 +1575,83 @@ function smGetData(){
 }
 
 // ── Gemini AI narrative generation ──────────────────────────────
-async function smGenerateNarrative(d, apiKey, rptLang){
-  var isAR = rptLang === "ar";
+async function smGenerateNarrative(d, rptLang){
+  // Build the payload — top10 ideas + at-risk ideas + lang + auth token
+  var token = sessionStorage.getItem("gsi_credential") || "";
 
-  // ── Build rich JSON context for Gemini ──────────────────────────
-  var top10Json = d.top10.map(function(r, i){
+  var top10Payload = d.top10.map(function(r){
     var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
     return {
-      rank: i+1,
-      idea: (r.content_en || r.content_ar || "").substring(0, 160),
-      votes: r.votes,
-      module: r.module,
-      status: r.status,
+      idea:         (r.content_en || r.content_ar || "").substring(0, 200),
+      idea_ar:      (r.content_ar || "").substring(0, 200),
+      votes:        r.votes,
+      module:       r.module,
+      status:       r.status,
       days_pending: days
     };
   });
 
-  var atRiskJson = d.atRisk.map(function(r){
+  var atRiskPayload = d.atRisk.map(function(r){
     var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
     return {
-      idea: (r.content_en || r.content_ar || "").substring(0, 160),
-      votes: r.votes,
-      module: r.module,
+      idea:         (r.content_en || r.content_ar || "").substring(0, 200),
+      idea_ar:      (r.content_ar || "").substring(0, 200),
+      votes:        r.votes,
+      module:       r.module,
       days_pending: days
     };
   });
 
-  var modulesJson = d.modules.slice(0, 9).map(function(m){
+  var modulesPayload = d.modules.slice(0, 9).map(function(m){
     var launchRate = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
     return {
-      module: m[0],
-      total_ideas: m[1].t,
-      launched: m[1].l,
-      non_launched: m[1].t - m[1].l,
+      module:          m[0],
+      total_ideas:     m[1].t,
+      launched:        m[1].l,
+      non_launched:    m[1].t - m[1].l,
       launch_rate_pct: launchRate,
-      total_votes: m[1].v
+      total_votes:     m[1].v
     };
   });
 
-  var contextJson = {
-    summary_stats: {
-      total_ideas: d.total,
-      launched: d.launched,
-      non_launched: d.nonLaunched,
-      launch_rate_pct: parseFloat(d.pct),
-      total_votes: d.votes,
-      avg_votes_per_idea: parseFloat(d.avgV),
-      at_risk_count: d.atRisk.length,
-      design_involvement: d.designCount,
-      ui_ideas: d.uiCount,
-      ux_ideas: d.uxCount,
-      period: d.dateLabel
+  var payload = {
+    lang:    rptLang,
+    token:   token,
+    stats: {
+      total_ideas:      d.total,
+      launched:         d.launched,
+      non_launched:     d.nonLaunched,
+      launch_rate_pct:  parseFloat(d.pct),
+      total_votes:      d.votes,
+      avg_votes:        parseFloat(d.avgV),
+      at_risk_count:    d.atRisk.length,
+      design_count:     d.designCount,
+      ui_count:         d.uiCount,
+      ux_count:         d.uxCount,
+      period:           d.dateLabel
     },
-    top_10_non_launched_by_votes: top10Json,
-    at_risk_ideas: atRiskJson,
-    module_breakdown: modulesJson
+    top_10_non_launched: top10Payload,
+    at_risk_ideas:       atRiskPayload,
+    module_breakdown:    modulesPayload
   };
 
-  var dataStr = JSON.stringify(contextJson, null, 2);
+  // POST to n8n — n8n responds when AI generation is complete
+  var resp = await fetch(N8N_SUMMARY_WEBHOOK, {
+    method:  "POST",
+    headers: {"Content-Type": "application/json"},
+    body:    JSON.stringify(payload)
+  });
 
-  // ── English analytical prompt ────────────────────────────────────
-  var enPrompt = "You are a senior product analyst at Rewaa, a Saudi B2B SaaS company for POS, inventory, and accounting used by merchants across Saudi Arabia.\n\n"
-    + "Your task: write a direct, honest, and analytically rigorous executive summary for C-level leadership (CPO, CEO, VP Product).\n\n"
-    + "STRICT RULES:\n"
-    + "- Be honest. Do NOT sugarcoat, do NOT praise the product, do NOT soften findings.\n"
-    + "- If the data reveals gaps, delays, or neglect — name them directly.\n"
-    + "- Do NOT restate numbers from the JSON. Interpret them. Extract meaning.\n"
-    + "- Read the actual idea text and identify the real customer pain behind it — not just the feature request.\n"
-    + "- No bullet points. No headings. Flowing narrative prose only.\n"
-    + "- Write 5 paragraphs. Each must be substantive — minimum 4 sentences.\n\n"
-    + "DATA:\n" + dataStr + "\n\n"
-    + "PARAGRAPH INSTRUCTIONS:\n\n"
-    + "Paragraph 1 — Overall Assessment: What does the overall picture say about how well the product is serving its customers? "
-    + "A " + d.pct + "% launch rate against " + d.total + " ideas — is that acceptable? "
-    + "What does the vote distribution and average engagement tell you about customer frustration or satisfaction? "
-    + "Be direct about what the numbers mean.\n\n"
-    + "Paragraph 2 — Top 10 Ideas Deep Dive: Read the actual idea text in top_10_non_launched_by_votes. "
-    + "Do not just list them — analyse what customers are really asking for underneath these requests. "
-    + "What business problems are they trying to solve? What does the pattern across these ideas reveal about product gaps? "
-    + "How would solving the top 3–5 most-voted ideas concretely improve merchant operations and Rewaa's competitiveness?\n\n"
-    + "Paragraph 3 — At-Risk Ideas — Urgency Assessment: Read at_risk_ideas carefully. "
-    + "These ideas have 20+ votes AND have been waiting 90+ days. "
-    + "What is the real cost of continued inaction — in customer trust, churn risk, and competitive exposure? "
-    + "Which modules are most exposed? Do not soften this — if these represent a retention risk, say so.\n\n"
-    + "Paragraph 4 — Module Analysis: Look at module_breakdown. "
-    + "Which modules have the highest unmet demand (high non-launched ideas, high votes, low launch rate)? "
-    + "Which modules are being underserved relative to how much customers care about them? "
-    + "Where is the product team's attention misaligned with what the market is asking for?\n\n"
-    + "Paragraph 5 — Executive Recommendation: Based on everything above, give one specific, high-impact recommendation "
-    + "that the CPO or CEO could act on this week. Name the module, name the problem, name the expected outcome. "
-    + "This should feel like advice from a trusted advisor, not a consultant report filler.";
+  if(!resp.ok) throw new Error("n8n webhook error: " + resp.status);
 
-  // ── Call Gemini for English analysis ────────────────────────────
-  async function callGemini(promptText){
-    var resp = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + apiKey,
-      {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          contents: [{parts: [{text: promptText}]}],
-          generationConfig: {temperature: 0.5, maxOutputTokens: 1600}
-        })
-      }
-    );
-    if(!resp.ok) throw new Error("Gemini API error: " + resp.status);
-    var json = await resp.json();
-    return json.candidates[0].content.parts[0].text.trim();
-  }
+  var json = await resp.json();
 
-  // Generate English narrative first (always)
-  var enNarrative = await callGemini(enPrompt);
+  // n8n should return { narrative: "..." }
+  if(!json.narrative) throw new Error("n8n response missing narrative field");
 
-  // If Arabic selected, translate the English output — same depth, just translated
-  if(isAR){
-    var translatePrompt = "You are a professional Arabic translator specialising in formal business and technology content.\n\n"
-      + "Translate the following executive summary from English to formal Arabic (Modern Standard Arabic / اللغة العربية الفصحى).\n\n"
-      + "RULES:\n"
-      + "- Preserve the full meaning, tone, and directness of the original. Do not soften or add praise.\n"
-      + "- Maintain the 5-paragraph structure. Keep flowing prose — no bullets, no headings.\n"
-      + "- Use natural business Arabic — the audience is C-level executives in a Saudi tech company.\n"
-      + "- Do not translate proper nouns (Rewaa, POS, etc.).\n\n"
-      + "TEXT TO TRANSLATE:\n" + enNarrative;
-    return await callGemini(translatePrompt);
-  }
-
-  return enNarrative;
+  return json.narrative;
 }
+
 
 // ── Build the HTML report for preview ───────────────────────────
 function smBuildReportHTML(d, narrative, cxComments){
@@ -1804,10 +1744,11 @@ function smBuildReportHTML(d, narrative, cxComments){
 
 // ── Main generate function ───────────────────────────────────────
 async function generateSummaryReport(){
-  var apiKey = document.getElementById("smApiKey").value.trim();
-  var cx     = document.getElementById("smCxComments").value||"";
-  if(!apiKey){ smSetStatus((document.getElementById("smLangSel").value==="ar"?"يرجى إدخال مفتاح Gemini API":"Please enter your Gemini API key"),"error"); return; }
+  var cx = document.getElementById("smCxComments").value||"";
   if(RAW.length===0){ smSetStatus("No data loaded yet","error"); return; }
+  if(!N8N_SUMMARY_WEBHOOK || N8N_SUMMARY_WEBHOOK.indexOf("PASTE_") === 0){
+    smSetStatus("Summary webhook URL not configured","error"); return;
+  }
 
   smSaveSettings();
   var d = smGetData();
@@ -1822,7 +1763,7 @@ async function generateSummaryReport(){
   smSetStatus(d.rptLang==="ar"?"جارٍ التوليد...":"Generating...","");
 
   try {
-    var narrative = await smGenerateNarrative(d, apiKey, d.rptLang);
+    var narrative = await smGenerateNarrative(d, d.rptLang);
     var reportHTML = smBuildReportHTML(d, narrative, cx);
     document.getElementById("smReportContent").innerHTML = reportHTML;
     SM.generated = true;

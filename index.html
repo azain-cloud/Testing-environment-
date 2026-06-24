@@ -1856,7 +1856,11 @@ function smBuildReportHTML(d, narrative, cxComments){
     html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"تعليقات فريق CX":"CX Comments")+'</div>';
     html += '<div class="rpt-cx-box"><div class="rpt-cx-label">'+(isAR?"توصيات وملاحظات":"Recommendations & Notes")+'</div><div class="rpt-cx-text">'+esc(cxComments.trim())+'</div></div></div>';
   }
-
+// ── PDF-Only Live Dashboard Link ──
+  html += '<div id="rptPdfFooter" style="display: none; text-align: center; margin-top: 50px; font-size: 11px; color: #8F959B; border-top: 1px solid #E1E7EB; padding-top: 15px;">' +
+    (isAR ? 'لمزيد من التفاصيل، يرجى زيارة <a href="https://azain-cloud.github.io/Testing-environment-/" style="color: #00A4A6; text-decoration: underline; font-weight: 600;">لوحة التحكم الحية للأفكار</a>' : 
+            'For more details please visit Ideas Live <a href="https://azain-cloud.github.io/Testing-environment-/" style="color: #00A4A6; text-decoration: underline; font-weight: 600;">Dashboard</a>') +
+  '</div>';
   html += '</div>'; // /rpt-page
   return html;
 }

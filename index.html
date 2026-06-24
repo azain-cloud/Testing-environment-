@@ -142,6 +142,23 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 .rpt-cx-box{background:#fffbf0;border:1.5px solid #F6CA59;border-radius:8px;padding:18px 20px;margin-top:8px}
 .rpt-cx-label{font-size:11px;font-weight:700;color:#92400e;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
 .rpt-cx-text{font-size:13px;color:#454F58;line-height:1.7;white-space:pre-wrap}
+/* ── PDF page-break control ── */
+.rpt-section{page-break-inside:avoid}
+.rpt-section-title{page-break-after:avoid}
+.rpt-narrative{page-break-inside:avoid}
+.rpt-kpi-grid{page-break-inside:avoid}
+.rpt-kpi{page-break-inside:avoid}
+.rpt-table tr{page-break-inside:avoid}
+.rpt-module-bar{page-break-inside:avoid}
+.rpt-cx-box{page-break-inside:avoid}
+@media print{
+  .rpt-cover{page-break-after:always}
+  .rpt-section{page-break-inside:avoid}
+  .rpt-table{page-break-inside:auto}
+  .rpt-table tr{page-break-inside:avoid;page-break-after:auto}
+  .rpt-kpi-grid{page-break-inside:avoid}
+  .rpt-module-bar{page-break-inside:avoid}
+}
 .rpt-generating{text-align:center;padding:60px 20px;color:#6A7279}
 .rpt-generating .spin-lg{font-size:32px;display:inline-block;animation:spinIcon 1s linear infinite;margin-bottom:12px}
 .sm-textarea{width:100%;border:1.5px solid #C4CFD7;border-radius:6px;padding:10px 14px;font-size:13px;color:#454F58;background:#fff;font-family:inherit;outline:none;resize:vertical;min-height:100px;line-height:1.6}
@@ -1294,6 +1311,33 @@ function openLink(el){var url=el.getAttribute("data-href");if(url&&url!=="#")win
         </div>
       </div>
 
+      <!-- Module filter -->
+      <div class="sm-divider"></div>
+      <div style="padding:12px 20px">
+        <label class="sm-opt-label" id="smModuleLabel">Filter by Module</label>
+        <div style="position:relative" id="smModuleMs">
+          <div class="sm-select" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none" onclick="smModuleToggle()">
+            <span id="smModuleLbl">All Modules</span><span style="font-size:9px;opacity:.6">▼</span>
+          </div>
+          <div id="smModuleDrop" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1.5px solid #C4CFD7;border-radius:8px;z-index:9999;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.12)">
+            <div style="padding:6px 10px;font-size:11px;color:#6A7279;cursor:pointer;border-bottom:1px solid #E1E7EB" onclick="smModuleClearAll()">All Modules</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- UI / UX toggle -->
+      <div style="padding:0 20px 12px">
+        <label class="sm-opt-label">Design Involvement</label>
+        <div style="display:flex;gap:8px">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#454F58;cursor:pointer">
+            <input type="checkbox" id="smFilterUI" style="accent-color:#00A4A6"> UI only
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#454F58;cursor:pointer">
+            <input type="checkbox" id="smFilterUX" style="accent-color:#00A4A6"> UX only
+          </label>
+        </div>
+      </div>
+
       <!-- CX Comments (optional) -->
       <div class="sm-divider"></div>
       <div style="padding:12px 20px 4px">
@@ -1363,13 +1407,69 @@ var SM = {
   recipients:     [],
   generated:      false,
   pdfBlob:        null,
-  _configLoading: false,  // guard: prevents smLoadConfig re-entrancy
-  _savePending:   false,  // guard: prevents smSaveRecipientStore re-entrancy
-  _saveDirty:     false,  // flag: queues one more save after current finishes
+  selectedModules:[],     // module filter for report
+  _configLoading: false,
+  _savePending:   false,
+  _saveDirty:     false,
 };
 
 // Rewaa brand logo SVG (teal, for light backgrounds, inline)
 var REWAA_LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="110" height="38" viewBox="0 0 236.63 55.61"><g><path d="M32.32,16.94c-.07.24-.15.47-.24.7l-3.52,10.4-3.79,11.2-2.74,8.11h0s-.02.09-.04.12c-.34.91-1.21,1.55-2.23,1.55s-1.97-.71-2.27-1.68h0l-2.39-8.34-6.05-21.11-2.35-8.19c-.02-.07-.05-.14-.06-.21h0c-.04-.18-.06-.36-.06-.55,0-1.31,1.07-2.37,2.37-2.37l2.81-.22,5.62-.43,5.75-.44h0c.2,0,.4-.01.6-.01,4.94,0,8.95,4.02,8.95,8.95,0,.87-.12,1.71-.36,2.5h0ZM33.94,4.23C31.27,1.55,27.73.06,23.96,0c-.08,0-.15,0-.23,0h-14.78s-.04,0-.06,0C3.98.03,0,4.03,0,8.95c0,.82.11,1.62.32,2.37,0,.02,0,.03.01.05,0,.02.01.05.02.07l10.78,37.59h0c1.04,3.79,4.52,6.58,8.63,6.58,2.47,0,4.71-1,6.33-2.63,1.08-1.08,1.89-2.44,2.31-3.95h0l9.13-30.32.05-.16s0-.01,0-.02c.38-1.31.58-2.69.58-4.09,0-3.85-1.5-7.48-4.23-10.21" fill="#00a4a6"/><path d="M67.51,10.35c-.87-.02-2.23-.03-4.08-.03-4.71,0-8.19,1.31-10.33,3.91-2.18,2.64-3.3,6.83-3.35,12.45l-.07,18.94c0,.12.06.2.1.24.04.04.12.1.24.1h5.41c.19,0,.34-.15.34-.34v-18.95c0-3.86.54-6.49,1.64-8.04h0c1.14-1.61,3.17-2.43,6.01-2.43l4.06.06c.14,0,.21-.06.24-.1.04-.04.1-.12.1-.24v-5.23c0-.19-.14-.33-.33-.34Z" fill="#00a4a6"/><path d="M95.16,12.02c-2.33-1.47-5.15-2.22-8.38-2.22-3.05,0-5.88.81-8.42,2.41-2.55,1.61-4.6,3.81-6.08,6.54-1.49,2.74-2.24,5.76-2.24,8.98s.75,6.48,2.25,9.25c1.49,2.76,3.57,4.98,6.18,6.61,2.64,1.57,5.63,2.37,8.87,2.37,3.42,0,6.55-.9,9.32-2.67,2.49-1.59,4.46-3.76,5.86-6.45.09-.17.03-.37-.13-.47l-4.1-2.4c-.16-.09-.36-.04-.46.12-2.4,3.97-5.86,5.98-10.29,5.98-2.21,0-4.22-.5-5.95-1.49-1.74-.99-3.13-2.42-4.12-4.25-.51-1.06-.87-2.08-1.1-3.06-.13-.55,0-1.13.35-1.57.35-.44.88-.69,1.44-.69h24.72c.19,0,.33-.14.34-.33,0-.33.01-.69.01-1.11,0-3.42-.75-6.51-2.24-9.2-1.49-2.69-3.46-4.83-5.84-6.36ZM96.56,22.7c-.34.55-1.29.88-1.93.88h-15.47c-.65,0-1.57-.33-1.9-.89-.34-.56-.03-1.25.29-1.84.64-1.21,1.61-2.28,2.87-3.19,1.84-1.32,4-1.99,6.43-1.99,2.23,0,4.34.64,6.29,1.89,1.4.9,2.46,2.02,3.13,3.33.29.58.63,1.25.29,1.8Z" fill="#00a4a6"/><path d="M145.19,32.47c-.21.52-.71.85-1.25.83-.56-.01-1.03-.36-1.22-.89l-7.29-20.88c-.36-1.04-1.34-1.73-2.44-1.73h-.42c-1.1,0-2.08.7-2.44,1.74l-7.23,20.87c-.18.53-.66.87-1.21.89-.54.03-1.05-.31-1.26-.83l-9.14-22.67h-6.86l14.85,34.6c.41.95,1.34,1.56,2.37,1.56h.38c1.1,0,2.08-.7,2.44-1.74l7.05-20.38c.19-.54.68-.89,1.25-.89s1.06.35,1.25.89l7.05,20.38c.36,1.04,1.34,1.74,2.44,1.74h.44c1.04,0,1.97-.62,2.37-1.57l14.79-34.59h-6.86l-9.07,22.67Z" fill="#00a4a6"/><path d="M196.98,9.8h-5.28c-.19,0-.34.15-.34.34v.89c0,.7-.39,1.34-1.02,1.65-.62.31-1.34.25-1.89-.16-.95-.71-2.01-1.3-3.14-1.77-1.8-.74-3.72-1.11-5.71-1.11-2.91,0-5.61.8-8.02,2.36-2.43,1.58-4.38,3.79-5.8,6.57h0c-1.38,2.69-2.08,5.69-2.08,8.92,0,3.49.7,6.67,2.08,9.46,1.37,2.78,3.32,4.98,5.79,6.55,2.39,1.63,5.08,2.44,8.03,2.44,2.02,0,3.94-.38,5.7-1.14,1.1-.48,2.15-1.09,3.11-1.83.33-.26.73-.39,1.13-.39.28,0,.56.06.82.19.62.31,1.01.93,1.01,1.63v1.19c0,.19.15.34.34.34h5.28c.19,0,.34-.15.34-.34V10.14c0-.19-.15-.34-.34-.34ZM190.11,33.89c-.89,1.85-2.18,3.33-3.82,4.41-1.6,1.08-3.47,1.63-5.57,1.63s-3.96-.52-5.56-1.55c-1.59-1.02-2.88-2.52-3.82-4.43-.98-1.85-1.48-4-1.48-6.37,0-2.16.45-4.18,1.33-6.01.9-1.86,2.21-3.32,3.91-4.35,1.64-1.02,3.53-1.54,5.61-1.54s3.96.52,5.56,1.55c1.6,1.02,2.88,2.49,3.82,4.36.89,1.75,1.33,3.77,1.33,5.99,0,2.36-.45,4.49-1.33,6.31Z" fill="#00a4a6"/><path d="M236.29,9.8h-5.28c-.19,0-.34.15-.34.34v.89c0,.7-.39,1.34-1.02,1.65-.62.31-1.34.25-1.89-.16-.96-.71-2.01-1.31-3.14-1.77-1.8-.74-3.73-1.11-5.71-1.11-2.91,0-5.6.8-8.02,2.36-2.43,1.58-4.38,3.79-5.8,6.57h0c-1.38,2.69-2.08,5.69-2.08,8.92,0,3.49.7,6.67,2.08,9.46,1.37,2.78,3.32,4.98,5.79,6.55,2.39,1.63,5.08,2.44,8.03,2.44,2.02,0,3.94-.38,5.7-1.14,1.1-.48,2.15-1.09,3.11-1.83.33-.26.73-.39,1.13-.39.28,0,.56.06.82.19.62.31,1.01.93,1.01,1.63v1.19c0,.19.15.34.34.34h5.28c.19,0,.34-.15.34-.34V10.14c0-.19-.15-.34-.34-.34ZM229.41,33.89c-.89,1.85-2.18,3.33-3.82,4.41-1.6,1.08-3.47,1.63-5.57,1.63s-3.96-.52-5.56-1.55c-1.59-1.02-2.88-2.52-3.82-4.43-.98-1.85-1.48-4-1.48-6.37,0-2.16.45-4.19,1.33-6.01.9-1.86,2.21-3.32,3.91-4.35,1.64-1.02,3.53-1.54,5.61-1.54s3.96.52,5.56,1.55c1.59,1.02,2.88,2.49,3.82,4.36.89,1.75,1.33,3.77,1.33,5.99,0,2.36-.45,4.49-1.33,6.31Z" fill="#00a4a6"/></g></svg>';
+
+// ── Module filter helpers ────────────────────────────────────────
+function smModuleBuildDrop(){
+  var drop = document.getElementById("smModuleDrop");
+  if(!drop) return;
+  var mods = ALL_MODULES;
+  var selected = SM.selectedModules;
+  drop.innerHTML = '<div style="padding:6px 10px;font-size:11px;color:#6A7279;cursor:pointer;border-bottom:1px solid #E1E7EB" onclick="smModuleClearAll()">All Modules</div>';
+  mods.forEach(function(m){
+    var isSel = selected.includes(m);
+    var div = document.createElement("div");
+    div.style.cssText = "padding:6px 10px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:6px;color:#454F58;";
+    div.innerHTML = '<span style="width:13px;height:13px;border:2px solid '+(isSel?"#00A4A6":"#C4CFD7")+';border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;background:'+(isSel?"#00A4A6":"transparent")+';color:#fff;flex-shrink:0">'+(isSel?"✓":"")+'</span>'+esc(M_EN[m]||m);
+    div.onclick = function(e){ e.stopPropagation(); smModuleToggleItem(m); };
+    drop.appendChild(div);
+  });
+}
+
+function smModuleToggle(){
+  var drop = document.getElementById("smModuleDrop");
+  if(!drop) return;
+  var isOpen = drop.style.display !== "none";
+  if(!isOpen){ smModuleBuildDrop(); drop.style.display="block"; }
+  else { drop.style.display="none"; }
+}
+
+function smModuleToggleItem(m){
+  var idx = SM.selectedModules.indexOf(m);
+  if(idx>=0) SM.selectedModules.splice(idx,1); else SM.selectedModules.push(m);
+  smModuleBuildDrop();
+  smModuleUpdateLabel();
+}
+
+function smModuleClearAll(){
+  SM.selectedModules = [];
+  var drop = document.getElementById("smModuleDrop");
+  if(drop) drop.style.display="none";
+  smModuleUpdateLabel();
+}
+
+function smModuleUpdateLabel(){
+  var lbl = document.getElementById("smModuleLbl");
+  if(!lbl) return;
+  if(!SM.selectedModules.length) lbl.textContent = "All Modules";
+  else if(SM.selectedModules.length===1) lbl.textContent = M_EN[SM.selectedModules[0]]||SM.selectedModules[0];
+  else lbl.textContent = SM.selectedModules.length+" modules selected";
+}
+
+// Close module drop on outside click
+document.addEventListener("click", function(e){
+  if(!e.target.closest("#smModuleMs")){
+    var drop = document.getElementById("smModuleDrop");
+    if(drop) drop.style.display="none";
+  }
+});
 
 // ── Modal open/close ─────────────────────────────────────────────
 function openSummaryModal(){
@@ -1532,16 +1632,30 @@ function smRemoveRecipient(i){
 
 // ── Data extraction for the summary ─────────────────────────────
 function smGetData(){
-  var rptLang = document.getElementById("smLangSel").value;
-  var dr      = document.getElementById("smDateRangeSel").value;
-  var from    = dr==="custom" ? document.getElementById("smDateFrom").value : "";
-  var to      = dr==="custom" ? document.getElementById("smDateTo").value   : "";
+  var rptLang   = document.getElementById("smLangSel").value;
+  var dr        = document.getElementById("smDateRangeSel").value;
+  var from      = dr==="custom" ? document.getElementById("smDateFrom").value : "";
+  var to        = dr==="custom" ? document.getElementById("smDateTo").value   : "";
+  var selMods   = SM.selectedModules || [];
+  var filterUI  = document.getElementById("smFilterUI") ? document.getElementById("smFilterUI").checked : false;
+  var filterUX  = document.getElementById("smFilterUX") ? document.getElementById("smFilterUX").checked : false;
 
-  // Filter RAW by date range (ignore status/module filters from the main dashboard)
+  // Build filter label for cover subtitle
+  var filterParts = [];
+  if(selMods.length) filterParts.push(selMods.map(function(m){return M_EN[m]||m;}).join(", "));
+  if(filterUI) filterParts.push("UI");
+  if(filterUX) filterParts.push("UX");
+  var filterLabel = filterParts.length ? filterParts.join(" · ") : "";
+
+  // Filter RAW by date + module + UI/UX
   var data = RAW.filter(function(r){
-    if(!from && !to) return true;
-    var d = r.date||"";
-    return (!from||d>=from) && (!to||d<=to);
+    var d   = r.date||"";
+    var dOk = (!from && !to) || ((!from||d>=from) && (!to||d<=to));
+    var mOk = !selMods.length || selMods.includes(r.module);
+    var uiOk = (!filterUI && !filterUX) ||
+               (filterUI && (r.uiux||"").toUpperCase()==="UI") ||
+               (filterUX && (r.uiux||"").toUpperCase()==="UX");
+    return dOk && mOk && uiOk;
   });
 
   var total      = data.length;
@@ -1570,56 +1684,98 @@ function smGetData(){
   var uiCount     = data.filter(function(r){return (r.uiux||"").toUpperCase()==="UI";}).length;
   var uxCount     = data.filter(function(r){return (r.uiux||"").toUpperCase()==="UX";}).length;
 
-  return {rptLang,total,launched:launched.length,nonLaunched:nonLaunch.length,votes,pct,avgV,top10,atRisk,modules,designCount,uiCount,uxCount,dateLabel:from&&to?(from+" → "+to):"All Time"};
+  return {rptLang,total,launched:launched.length,nonLaunched:nonLaunch.length,votes,pct,avgV,top10,atRisk,modules,designCount,uiCount,uxCount,dateLabel:from&&to?(from+" → "+to):"All Time",filterLabel:filterLabel};
 }
 
 // ── Gemini AI narrative generation ──────────────────────────────
 async function smGenerateNarrative(d, rptLang){
-  var token = sessionStorage.getItem("gsi_credential") || "";
-  
-  var top10Payload = d.top10.map(function(r){
-    var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
-    return { i: (r.content_en || r.content_ar || "").substring(0, 100), v: r.votes, m: r.module, d: days };
+  return new Promise(function(resolve, reject){
+    var token  = sessionStorage.getItem("gsi_credential") || "";
+    var cbName = "summaryCb_" + Date.now();
+
+    // Build payload — this goes to Apps Script which proxies to n8n
+    // Keep payload compact to stay within URL length limits (~4KB encoded)
+    // Use content_en as primary (n8n handles translation), truncate to 100 chars
+    var top10Payload = d.top10.map(function(r){
+      var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
+      return {
+        i: (r.content_en || r.content_ar || "").substring(0, 100),
+        v: r.votes,
+        m: r.module,
+        d: days
+      };
+    });
+
+    var atRiskPayload = d.atRisk.map(function(r){
+      var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
+      return {
+        i: (r.content_en || r.content_ar || "").substring(0, 100),
+        v: r.votes,
+        m: r.module,
+        d: days
+      };
+    });
+
+    var modulesPayload = d.modules.slice(0, 9).map(function(m){
+      var lr = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
+      return { m: m[0], t: m[1].t, l: m[1].l, lr: lr, v: m[1].v };
+    });
+
+    var payloadObj = {
+      lang: rptLang,
+      s: {
+        t:   d.total,
+        l:   d.launched,
+        nl:  d.nonLaunched,
+        lr:  parseFloat(d.pct),
+        tv:  d.votes,
+        av:  parseFloat(d.avgV),
+        ar:  d.atRisk.length,
+        dc:  d.designCount,
+        ui:  d.uiCount,
+        ux:  d.uxCount,
+        p:   d.dateLabel
+      },
+      t10: top10Payload,
+      risk: atRiskPayload,
+      mod:  modulesPayload
+    };
+
+    window[cbName] = function(json){
+      var s = document.getElementById(cbName);
+      if(s) s.parentNode.removeChild(s);
+      delete window[cbName];
+      if(!json || json.error){
+        reject(new Error(json ? json.error : "No response from Apps Script"));
+        return;
+      }
+      if(!json.narrative){
+        reject(new Error("Apps Script response missing narrative field"));
+        return;
+      }
+      resolve(json.narrative);
+    };
+
+    var script = document.createElement("script");
+    script.id  = cbName;
+    // Pass payload as URL-encoded JSON — Apps Script reads e.parameter.payload
+    script.src = APPS_SCRIPT_URL
+      + "?action=get_summary"
+      + "&callback=" + cbName
+      + "&token="   + encodeURIComponent(token)
+      + "&payload=" + encodeURIComponent(JSON.stringify(payloadObj));
+
+    script.onerror = function(){
+      var s = document.getElementById(cbName);
+      if(s) s.parentNode.removeChild(s);
+      delete window[cbName];
+      reject(new Error("Apps Script request failed — check deployment"));
+    };
+
+    document.body.appendChild(script);
   });
-
-  var atRiskPayload = d.atRisk.map(function(r){
-    var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
-    return { i: (r.content_en || r.content_ar || "").substring(0, 100), v: r.votes, m: r.module, d: days };
-  });
-
-  var modulesPayload = d.modules.slice(0, 9).map(function(m){
-    var lr = m[1].t ? Math.round((m[1].l / m[1].t) * 100) : 0;
-    return { m: m[0], t: m[1].t, l: m[1].l, lr: lr, v: m[1].v };
-  });
-
-  var payloadObj = {
-    lang: rptLang,
-    s: { t: d.total, l: d.launched, nl: d.nonLaunched, lr: parseFloat(d.pct), tv: d.votes, av: parseFloat(d.avgV), ar: d.atRisk.length, dc: d.designCount, ui: d.uiCount, ux: d.uxCount, p: d.dateLabel },
-    t10: top10Payload,
-    risk: atRiskPayload,
-    mod:  modulesPayload
-  };
-
-  const response = await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    body: new URLSearchParams({
-      token: token,
-      action: "get_summary",
-      payload: JSON.stringify(payloadObj)
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error("Apps Script endpoint responded with a network error status.");
-  }
-
-  var json = await response.json();
-  if (json.error) {
-    throw new Error(json.error);
-  }
-  
-  return json.narrative;
 }
+
 
 // ── Build the HTML report for preview ───────────────────────────
 function smBuildReportHTML(d, narrative, cxComments){
@@ -1644,7 +1800,9 @@ function smBuildReportHTML(d, narrative, cxComments){
   html += '<div class="rpt-cover">';
   html += '<div class="rpt-cover-logo">'+REWAA_LOGO_SVG.replace(/fill="#00a4a6"/g,'fill="#ffffff"')+'</div>';
   html += '<div class="rpt-cover-title">'+(isAR?"تقرير الملخص التنفيذي":"Executive Summary Report")+'</div>';
-  html += '<div class="rpt-cover-sub">'+(isAR?"منصة رواء · أفكار العملاء":"Rewaa Platform · Customer Ideas")+'</div>';
+  var coverSub = isAR?"منصة رواء · أفكار العملاء":"Rewaa Platform · Customer Ideas";
+  if(d.filterLabel) coverSub += ' &nbsp;·&nbsp; <span style="opacity:.8;font-size:12px">'+esc(d.filterLabel)+'</span>';
+  html += '<div class="rpt-cover-sub">'+coverSub+'</div>';
   html += '<div class="rpt-cover-meta">';
   html += '<span class="rpt-cover-chip">'+dateStr+'</span>';
   html += '<span class="rpt-cover-chip">'+(isAR?"الفترة: ":"Period: ")+d.dateLabel+'</span>';
@@ -1653,12 +1811,8 @@ function smBuildReportHTML(d, narrative, cxComments){
 
   // ── AI Narrative ──
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الملخص التنفيذي":"Executive Overview")+'</div>';
-// Convert markdown bold indicators and double quotes to clean HTML bold tags after escaping
-  var processedNarrative = esc(narrative)
-    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-    .replace(/""(.*?)""/g, '<b>$1</b>');
+  html += '<div class="rpt-narrative">'+esc(narrative).replace(/\n\n/g,'</div><div class="rpt-narrative" style="margin-top:10px">').replace(/\n/g,' ')+'</div></div>';
 
-  html += '<div class="rpt-narrative">' + processedNarrative.replace(/\n\n/g,'</div><div class="rpt-narrative" style="margin-top:10px">').replace(/\n/g,' ') + '</div></div>';
   // ── KPIs ──
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"المقاييس الرئيسية":"Key Metrics")+'</div>';
   html += '<div class="rpt-kpi-grid">';

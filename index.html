@@ -171,6 +171,55 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 @media print {
   .rpt-cover { page-break-after: always !important; }
 }
+
+  /* ── REWAA CAULDRON LOADER ── */
+.brew-scene {
+  position: relative;
+  width: 200px;
+  height: 140px;
+  margin: 0 auto 10px;
+  overflow: hidden;
+  user-select: none;
+}
+.brew-fire {
+  position: absolute;
+  bottom: 2px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 18px;
+  opacity: 0.9;
+}
+.brew-pot {
+  position: absolute;
+  bottom: 20px;
+  left: 65px;
+  font-size: 46px;
+  z-index: 5;
+  animation: potBubble 0.6s ease-in-out infinite alternate;
+}
+.brew-vapor {
+  position: absolute;
+  bottom: 65px;
+  z-index: 3;
+  opacity: 0;
+  font-size: 20px;
+}
+.v1 { left: 75px; animation: floatUp 1.8s linear infinite; }
+.v2 { left: 95px; animation: floatUp 2.2s linear infinite 0.6s; }
+.v3 { left: 115px; animation: floatUp 2s linear infinite 1.2s; }
+
+@keyframes potBubble {
+  0% { transform: translateY(0) scaleX(1); }
+  100% { transform: translateY(-3px) scaleX(1.03); }
+}
+@keyframes floatUp {
+  0% { opacity: 0; transform: translateY(15px) scale(0.6) translateX(0); }
+  20% { opacity: 1; }
+  50% { transform: translateY(-20px) scale(1.1) translateX(-8px); }
+  80% { opacity: 0.8; }
+  100% { opacity: 0; transform: translateY(-55px) scale(0.8) translateX(8px); }
+}
 .rpt-generating{text-align:center;padding:60px 20px;color:#6A7279}
 .rpt-generating .spin-lg{font-size:32px;display:inline-block;animation:spinIcon 1s linear infinite;margin-bottom:12px}
 .sm-textarea{width:100%;border:1.5px solid #C4CFD7;border-radius:6px;padding:10px 14px;font-size:13px;color:#454F58;background:#fff;font-family:inherit;outline:none;resize:vertical;min-height:100px;line-height:1.6}
@@ -1879,8 +1928,22 @@ async function generateSummaryReport(){
   // Show generating state
   document.getElementById("smPlaceholder").style.display="none";
   document.getElementById("smReportContent").style.display="block";
-  document.getElementById("smReportContent").innerHTML='<div class="rpt-generating"><div class="spin-lg">⚡</div><div style="font-size:14px;font-weight:600;color:#00205C;margin-bottom:4px">'+(d.rptLang==="ar"?"جارٍ توليد التقرير...":"Generating report...")+'</div><div style="font-size:12px;color:#8F959B">'+(d.rptLang==="ar"?"نستخدم الذكاء الاصطناعي لتحليل البيانات":"Using AI to analyse the data")+'</div></div>';
-  document.getElementById("smGenerateBtn").disabled=true;
+document.getElementById("smReportContent").innerHTML = 
+    '<div class="rpt-generating">' +
+      '<div class="brew-scene">' +
+        '<div class="brew-vapor v1">💨</div>' +
+        '<div class="brew-vapor v2">✨</div>' +
+        '<div class="brew-vapor v3">🫧</div>' +
+        '<div class="brew-pot">🥣</div>' +
+        '<div class="brew-fire">🔥🔥</div>' +
+      '</div>' +
+      '<div style="font-size:14px;font-weight:600;color:#00205C;margin-bottom:4px">' + 
+        (d.rptLang==="ar" ? "جاري صياغة التقرير..." : "Crafting the report...") + 
+      '</div>' +
+      '<div style="font-size:12px;color:#8F959B">' + 
+        (d.rptLang==="ar" ? "جاري دمج " + d.total + " فكرة من أفكار العملاء..." : "Simmering " + d.total + " customer ideas") + 
+      '</div>' +
+    '</div>';  document.getElementById("smGenerateBtn").disabled=true;
   document.getElementById("smDownloadBtn").style.display="none";
   document.getElementById("smEmailBtn").style.display="none";
   smSetStatus(d.rptLang==="ar"?"جارٍ التوليد...":"Generating...","");

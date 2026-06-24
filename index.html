@@ -142,22 +142,34 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 .rpt-cx-box{background:#fffbf0;border:1.5px solid #F6CA59;border-radius:8px;padding:18px 20px;margin-top:8px}
 .rpt-cx-label{font-size:11px;font-weight:700;color:#92400e;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
 .rpt-cx-text{font-size:13px;color:#454F58;line-height:1.7;white-space:pre-wrap}
-/* ── PDF page-break control ── */
-.rpt-section{page-break-inside:avoid}
-.rpt-section-title{page-break-after:avoid}
-.rpt-narrative{page-break-inside:avoid}
-.rpt-kpi-grid{page-break-inside:avoid}
-.rpt-kpi{page-break-inside:avoid}
-.rpt-table tr{page-break-inside:avoid}
-.rpt-module-bar{page-break-inside:avoid}
-.rpt-cx-box{page-break-inside:avoid}
-@media print{
-  .rpt-cover{page-break-after:always}
-  .rpt-section{page-break-inside:avoid}
-  .rpt-table{page-break-inside:auto}
-  .rpt-table tr{page-break-inside:avoid;page-break-after:auto}
-  .rpt-kpi-grid{page-break-inside:avoid}
-  .rpt-module-bar{page-break-inside:avoid}
+/* ── SMART PDF PAGE BREAKING ── */
+.rpt-section {
+  page-break-inside: auto !important;
+  break-inside: auto !important;
+}
+
+.rpt-section-title {
+  page-break-after: avoid !important;
+  break-after: avoid !important;
+}
+
+.rpt-table {
+  page-break-inside: auto !important;
+  break-inside: auto !important;
+}
+
+.rpt-table tr {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+.rpt-kpi-grid, .rpt-cx-box, .rpt-narrative, .rpt-module-bar, .rpt-kpi {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+@media print {
+  .rpt-cover { page-break-after: always !important; }
 }
 .rpt-generating{text-align:center;padding:60px 20px;color:#6A7279}
 .rpt-generating .spin-lg{font-size:32px;display:inline-block;animation:spinIcon 1s linear infinite;margin-bottom:12px}

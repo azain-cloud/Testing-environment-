@@ -1901,9 +1901,14 @@ function downloadSummaryPdf(){
   if(!SM.generated){ smSetStatus("Generate the report first","error"); return; }
   var el = document.getElementById("smReportContent");
   var isAR = document.getElementById("smLangSel").value==="ar";
+// Unhide the footer link right before the PDF engine captures the DOM element
+  var pdfFooter = document.getElementById("rptPdfFooter");
+  if(pdfFooter) pdfFooter.style.display = "block";
+
   var now = new Date();
   var fname = "Rewaa_Executive_Summary_"+now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")+".pdf";
   smSetStatus(isAR?"جارٍ تحضير ملف PDF...":"Preparing PDF...","");
+  
   var opt = {
     margin: [10,10,10,10],
     filename: fname,
@@ -1911,9 +1916,13 @@ function downloadSummaryPdf(){
     html2canvas: {scale:2,useCORS:true,logging:false},
     jsPDF: {unit:"mm",format:"a4",orientation:"landscape"}
   };
+  
   html2pdf().set(opt).from(el).save().then(function(){
+    // Instantly hide it again so it stays invisible on the dashboard preview screen
+    if(pdfFooter) pdfFooter.style.display = "none";
     smSetStatus(isAR?"تم تحميل الملف ✓":"PDF downloaded ✓","success");
   }).catch(function(e){
+    if(pdfFooter) pdfFooter.style.display = "none";
     smSetStatus("PDF error: "+e.message,"error");
   });
 }

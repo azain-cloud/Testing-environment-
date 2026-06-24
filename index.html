@@ -1803,8 +1803,12 @@ function smBuildReportHTML(d, narrative, cxComments){
   html += '</div></div>';
 
   // ── AI Narrative ──
-  html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الملخص التنفيذي":"Executive Overview")+'</div>';
-  html += '<div class="rpt-narrative">'+esc(narrative).replace(/\n\n/g,'</div><div class="rpt-narrative" style="margin-top:10px">').replace(/\n/g,' ')+'</div></div>';
+html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الملخص التنفيذي":"Executive Overview")+'</div>';
+
+  // Safely escape html elements, then convert raw markdown text headers into real bold elements
+  var processedNarrative = esc(narrative).replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
+  html += '<div class="rpt-narrative">' + processedNarrative.replace(/\n\n/g,'</div><div class="rpt-narrative" style="margin-top:10px">').replace(/\n/g,' ') + '</div></div>';
 
   // ── KPIs ──
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"المقاييس الرئيسية":"Key Metrics")+'</div>';

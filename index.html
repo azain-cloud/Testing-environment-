@@ -169,7 +169,19 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 }
 
 @media print {
-  .rpt-cover { page-break-after: always !important; }
+  .rpt-cover { 
+    page-break-after: always !important; 
+  }
+  
+  /* FORCES PDF ENGINE TO CALCULATE ARABIC GLYPH WIDTHS CORRECTLY */
+  .rpt-cover h1, 
+  .rpt-cover div, 
+  .rpt-cover-title {
+    display: block !important;
+    letter-spacing: 0px !important;
+    font-family: 'Tahoma', 'Arial', sans-serif !important;
+    font-feature-settings: "kern" 0, "liga" 0 !important;
+  }
 }
 
   /* ── REWAA CAULDRON LOADER ── */
@@ -1911,8 +1923,8 @@ html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الم
   }
 // ── PDF-Only Live Dashboard Link ──
   html += '<div id="rptPdfFooter" style="display: none; text-align: center; margin-top: 50px; font-size: 11px; color: #8F959B; border-top: 1px solid #E1E7EB; padding-top: 15px;">' +
-    (isAR ? 'لمزيد من التفاصيل، يرجى زيارة <a href="https://azain-cloud.github.io/Testing-environment-/" style="color: #00A4A6; text-decoration: underline; font-weight: 600;">لوحة التحكم الحية للأفكار</a>' : 
-            'For more details please visit Ideas Live <a href="https://azain-cloud.github.io/Testing-environment-/" style="color: #00A4A6; text-decoration: underline; font-weight: 600;">Dashboard</a>') +
+    (isAR ? 'لمزيد من التفاصيل، يرجى زيارة <a href="https://sites.google.com/rewaa.com/frillreport/firll-ideas" style="color: #00A4A6; text-decoration: underline; font-weight: 600;">لوحة التحكم للأفكار</a>' : 
+            'For more details please visit Ideas Live <a href="https://sites.google.com/rewaa.com/frillreport/firll-ideas" style="color: #00A4A6; text-decoration: underline; font-weight: 600;">Dashboard</a>') +
   '</div>';
   html += '</div>'; // /rpt-page
   return html;

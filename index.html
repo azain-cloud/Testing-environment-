@@ -169,21 +169,8 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 }
 
 @media print {
-  .rpt-cover { 
-    page-break-after: always !important; 
-  }
-  
-  /* FORCES PDF ENGINE TO CALCULATE ARABIC GLYPH WIDTHS CORRECTLY */
-  .rpt-cover h1, 
-  .rpt-cover div, 
-  .rpt-cover-title {
-direction: rtl !important;
-    text-align: right !important;
-    font-weight: normal !important; /* CRITICAL: Prevents html2canvas from clumping bold characters */
-    font-family: 'Tahoma', 'Arial', sans-serif !important;
-    letter-spacing: normal !important;
-    word-spacing: normal !important;
-    font-feature-settings: "kern" 0, "liga" 1 !important; /* Keeps letters naturally connected but spaced */
+  .rpt-cover {
+    page-break-after: always !important;
   }
 }
 
@@ -1418,7 +1405,7 @@ function openLink(el){var url=el.getAttribute("data-href");if(url&&url!=="#")win
       <div class="sm-divider"></div>
       <div style="padding:12px 20px 4px">
         <label class="sm-opt-label" id="smCxLabel">CX Comments <span style="color:#8F959B;font-weight:400">(optional)</span></label>
-        <textarea class="sm-textarea" id="smCxComments" rows="4" id="smCxComments" placeholder="Add your recommendations or observations..."></textarea>
+        <textarea class="sm-textarea" id="smCxComments" rows="4" placeholder="Add your recommendations or observations..."></textarea>
       </div>
 
       <!-- Email Recipients -->
@@ -1980,14 +1967,26 @@ function downloadSummaryPdf(){
   if(!SM.generated){ smSetStatus("Generate the report first","error"); return; }
   var el = document.getElementById("smReportContent");
   var isAR = document.getElementById("smLangSel").value==="ar";
-// Unhide the footer link right before the PDF engine captures the DOM element
+
   var pdfFooter = document.getElementById("rptPdfFooter");
   if(pdfFooter) pdfFooter.style.display = "block";
+
+  // html2canvas ignores @media print styles, so Arabic bold text renders scrambled.
+  // Inject a screen-style override that normalises font-weight on the cover before capture.
+  var pdfFixStyle = document.createElement("style");
+  pdfFixStyle.id = "_pdfArabicFix";
+  pdfFixStyle.textContent =
+    ".rpt-cover-title, .rpt-cover-sub, .rpt-cover-chip {" +
+      "font-weight: normal !important;" +
+      "direction: rtl !important;" +
+      "unicode-bidi: embed !important;" +
+    "}";
+  document.head.appendChild(pdfFixStyle);
 
   var now = new Date();
   var fname = "Rewaa_Executive_Summary_"+now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")+".pdf";
   smSetStatus(isAR?"جارٍ تحضير ملف PDF...":"Preparing PDF...","");
-  
+
   var opt = {
     margin: [10,10,10,10],
     filename: fname,
@@ -1995,13 +1994,18 @@ function downloadSummaryPdf(){
     html2canvas: {scale:2,useCORS:true,logging:false},
     jsPDF: {unit:"mm",format:"a4",orientation:"landscape"}
   };
-  
-  html2pdf().set(opt).from(el).save().then(function(){
-    // Instantly hide it again so it stays invisible on the dashboard preview screen
+
+  function _pdfCleanup(){
     if(pdfFooter) pdfFooter.style.display = "none";
+    var fix = document.getElementById("_pdfArabicFix");
+    if(fix) fix.parentNode.removeChild(fix);
+  }
+
+  html2pdf().set(opt).from(el).save().then(function(){
+    _pdfCleanup();
     smSetStatus(isAR?"تم تحميل الملف ✓":"PDF downloaded ✓","success");
   }).catch(function(e){
-    if(pdfFooter) pdfFooter.style.display = "none";
+    _pdfCleanup();
     smSetStatus("PDF error: "+e.message,"error");
   });
 }

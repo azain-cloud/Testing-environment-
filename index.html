@@ -1965,15 +1965,31 @@ document.getElementById("smReportContent").innerHTML =
 // ── PDF download ─────────────────────────────────────────────────
 function downloadSummaryPdf(){
   if(!SM.generated){ smSetStatus("Generate the report first","error"); return; }
-  var el = document.getElementById("smReportContent");
   var isAR = document.getElementById("smLangSel").value==="ar";
-
-  var pdfFooter = document.getElementById("rptPdfFooter");
-  if(pdfFooter) pdfFooter.style.display = "block";
 
   var now = new Date();
   var fname = "Rewaa_Executive_Summary_"+now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")+".pdf";
   smSetStatus(isAR?"جارٍ تحضير ملف PDF...":"Preparing PDF...","");
+
+  // Clone the report into an offscreen fixed-width container.
+  // This isolates rendering from the modal's flex layout, which causes
+  // html2canvas to miscalculate scrollWidth and clip content in RTL mode.
+  // A4 landscape (297mm) minus 10mm margins each side ≈ 1040px at 96ppi.
+  var RENDER_WIDTH = 1040;
+  var source = document.getElementById("smReportContent");
+  var clone  = source.cloneNode(true);
+
+  // Unhide the footer link in the clone only (never touches the live preview)
+  var cloneFooter = clone.querySelector("#rptPdfFooter");
+  if(cloneFooter) cloneFooter.style.display = "block";
+
+  var stage = document.createElement("div");
+  stage.style.cssText =
+    "position:absolute;top:0;left:-9999px;" +
+    "width:" + RENDER_WIDTH + "px;" +
+    "overflow:visible;background:#fff;";
+  stage.appendChild(clone);
+  document.body.appendChild(stage);
 
   var opt = {
     margin: [10,10,10,10],
@@ -1983,19 +1999,20 @@ function downloadSummaryPdf(){
       scale: 2,
       useCORS: true,
       logging: false,
-      // foreignObjectRendering delegates text layout to the browser's native SVG engine
-      // instead of html2canvas's own engine, which cannot handle Arabic shaping or RTL direction.
-      // This fixes both the scrambled Arabic glyphs and the RTL alignment issues in the body.
-      foreignObjectRendering: true
+      windowWidth: RENDER_WIDTH,
+      // foreignObjectRendering uses the browser's native SVG engine for text layout,
+      // which correctly handles Arabic shaping, ligatures, and RTL direction.
+      // Not needed for English — html2canvas's default engine handles LTR fine.
+      foreignObjectRendering: isAR
     },
     jsPDF: {unit:"mm",format:"a4",orientation:"landscape"}
   };
 
   function _pdfCleanup(){
-    if(pdfFooter) pdfFooter.style.display = "none";
+    if(stage.parentNode) stage.parentNode.removeChild(stage);
   }
 
-  html2pdf().set(opt).from(el).save().then(function(){
+  html2pdf().set(opt).from(clone).save().then(function(){
     _pdfCleanup();
     smSetStatus(isAR?"تم تحميل الملف ✓":"PDF downloaded ✓","success");
   }).catch(function(e){

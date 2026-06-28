@@ -1971,18 +1971,6 @@ function downloadSummaryPdf(){
   var pdfFooter = document.getElementById("rptPdfFooter");
   if(pdfFooter) pdfFooter.style.display = "block";
 
-  // html2canvas ignores @media print styles, so Arabic bold text renders scrambled.
-  // Inject a screen-style override that normalises font-weight on the cover before capture.
-  var pdfFixStyle = document.createElement("style");
-  pdfFixStyle.id = "_pdfArabicFix";
-  pdfFixStyle.textContent =
-    ".rpt-cover-title, .rpt-cover-sub, .rpt-cover-chip {" +
-      "font-weight: normal !important;" +
-      "direction: rtl !important;" +
-      "unicode-bidi: embed !important;" +
-    "}";
-  document.head.appendChild(pdfFixStyle);
-
   var now = new Date();
   var fname = "Rewaa_Executive_Summary_"+now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")+".pdf";
   smSetStatus(isAR?"جارٍ تحضير ملف PDF...":"Preparing PDF...","");
@@ -1991,14 +1979,20 @@ function downloadSummaryPdf(){
     margin: [10,10,10,10],
     filename: fname,
     image: {type:"jpeg",quality:0.95},
-    html2canvas: {scale:2,useCORS:true,logging:false},
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      // foreignObjectRendering delegates text layout to the browser's native SVG engine
+      // instead of html2canvas's own engine, which cannot handle Arabic shaping or RTL direction.
+      // This fixes both the scrambled Arabic glyphs and the RTL alignment issues in the body.
+      foreignObjectRendering: true
+    },
     jsPDF: {unit:"mm",format:"a4",orientation:"landscape"}
   };
 
   function _pdfCleanup(){
     if(pdfFooter) pdfFooter.style.display = "none";
-    var fix = document.getElementById("_pdfArabicFix");
-    if(fix) fix.parentNode.removeChild(fix);
   }
 
   html2pdf().set(opt).from(el).save().then(function(){

@@ -166,7 +166,7 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
   break-inside: avoid !important;
 }
 
-.rpt-kpi-grid, .rpt-cx-box, .rpt-narrative, .rpt-module-bar, .rpt-kpi {
+.rpt-kpi-grid, .rpt-cx-box, .rpt-narrative, .rpt-module-bar, .rpt-kpi, .rpt-keep {
   page-break-inside: avoid !important;
   break-inside: avoid !important;
 }
@@ -1903,7 +1903,7 @@ html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الم
 
   // ── Design / UI / UX ──
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"متطلبات التصميم والواجهة":"Design & Interface Involvement")+'</div>';
-  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">';
+  html += '<div class="rpt-keep" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">';
   html += '<div class="rpt-kpi" style="border-top-color:#92400e"><div class="rpt-kpi-val" style="color:#92400e">'+d.designCount+'</div><div class="rpt-kpi-lbl">Design</div><div class="rpt-kpi-sub">'+(isAR?"تشمل تصميماً":"Involve design")+'</div></div>';
   html += '<div class="rpt-kpi" style="border-top-color:#1d4ed8"><div class="rpt-kpi-val" style="color:#1d4ed8">'+d.uiCount+'</div><div class="rpt-kpi-lbl">UI</div><div class="rpt-kpi-sub">'+(isAR?"واجهة مستخدم":"Interface changes")+'</div></div>';
   html += '<div class="rpt-kpi" style="border-top-color:#9d174d"><div class="rpt-kpi-val" style="color:#9d174d">'+d.uxCount+'</div><div class="rpt-kpi-lbl">UX</div><div class="rpt-kpi-sub">'+(isAR?"تجربة مستخدم":"Experience changes")+'</div></div>';

@@ -2024,7 +2024,14 @@ function downloadSummaryPdf(){
     filename: fname,
     image: {type:"jpeg",quality:0.95},
     html2canvas: {scale:2,useCORS:true,logging:false},
-    jsPDF: {unit:"mm",format:"a4",orientation:"landscape"}
+    jsPDF: {unit:"mm",format:"a4",orientation:"landscape"},
+    // Explicit avoid selectors are more reliable than CSS-only page-break rules,
+    // especially for items inside CSS grids (module bars, KPI cards) which html2pdf
+    // would otherwise slice across the page boundary.
+    pagebreak: {
+      mode: ["css","legacy"],
+      avoid: [".rpt-module-bar",".rpt-kpi",".rpt-narrative",".rpt-keep",".rpt-section-title",".rpt-cx-box","tr"]
+    }
   };
 
   function _pdfCleanup(){

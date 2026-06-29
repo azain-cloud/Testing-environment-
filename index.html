@@ -119,6 +119,8 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 .rpt-section-title{font-size:15px;font-weight:700;color:#00205C;margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .rpt-section-title::before{content:'';display:inline-block;width:4px;height:18px;background:#00A4A6;border-radius:2px;flex-shrink:0}
 .rpt-narrative{background:#f8fafb;border-left:3px solid #00A4A6;padding:14px 18px;border-radius:0 8px 8px 0;font-size:13px;color:#454F58;line-height:1.7;margin-bottom:16px;font-style:italic}
+.rpt-narrative-title{font-style:normal;font-weight:700;color:#00205C;font-size:13.5px;margin-bottom:8px}
+.rpt-narrative-body{font-style:italic}
 .rpt-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:0}
 .rpt-kpi{background:#f8fafb;border:1px solid #E1E7EB;border-radius:8px;padding:14px 16px;border-top:3px solid #00A4A6}
 .rpt-kpi-val{font-size:26px;font-weight:800;color:#00205C;line-height:1}
@@ -1859,10 +1861,36 @@ function smBuildReportHTML(d, narrative, cxComments){
   // ── AI Narrative ──
 html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الملخص التنفيذي":"Executive Overview")+'</div>';
 
-  // Safely escape html elements, then convert raw markdown text headers into real bold elements
-  var processedNarrative = esc(narrative).replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+  // Parse the markdown narrative into blocks (separated by blank lines), then group
+  // each title (**...**) with its following paragraph inside one shared box so the
+  // title sits on its own line directly above its paragraph.
+  var isTitleOnly = function(b){ return /^\*\*(.+?)\*\*$/.test(b); };
+  var inlineBold  = function(t){ return t.replace(/\n/g,' ').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>'); };
+  var box = function(title, body){
+    return '<div class="rpt-narrative">' +
+      (title ? '<div class="rpt-narrative-title">'+title+'</div>' : '') +
+      (body  ? '<div class="rpt-narrative-body">'+body+'</div>'   : '') +
+    '</div>';
+  };
 
-  html += '<div class="rpt-narrative">' + processedNarrative.replace(/\n\n/g,'</div><div class="rpt-narrative" style="margin-top:10px">').replace(/\n/g,' ') + '</div></div>';
+  var blocks = esc(narrative).split(/\n\s*\n/).map(function(s){return s.trim();}).filter(Boolean);
+  var narrativeHtml = "";
+  for(var bi=0; bi<blocks.length; bi++){
+    var b = blocks[bi];
+    var titleOnly = b.match(/^\*\*(.+?)\*\*$/);          // whole block is just a title
+    var leading   = b.match(/^\*\*(.+?)\*\*\s*([\s\S]+)$/); // title inline at start of block
+    if(titleOnly){
+      // Pair with the next block as the paragraph, if it isn't itself a title
+      var body = "";
+      if(bi+1<blocks.length && !isTitleOnly(blocks[bi+1])){ body = inlineBold(blocks[bi+1]); bi++; }
+      narrativeHtml += box(titleOnly[1], body);
+    } else if(leading && leading[2].trim()){
+      narrativeHtml += box(leading[1], inlineBold(leading[2].trim()));
+    } else {
+      narrativeHtml += box("", inlineBold(b));
+    }
+  }
+  html += narrativeHtml + '</div>';
 
   // ── KPIs ──
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"المقاييس الرئيسية":"Key Metrics")+'</div>';

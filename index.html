@@ -116,8 +116,11 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 .rpt-cover-chip{background:rgba(255,255,255,.15);border-radius:20px;padding:5px 14px;font-size:11px;color:#fff;font-weight:600}
 .rpt-section{padding:24px 0;border-bottom:1px solid #E1E7EB}
 .rpt-section:last-child{border-bottom:none}
-.rpt-section-title{font-size:15px;font-weight:700;color:#00205C;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.rpt-section-title::before{content:'';display:inline-block;width:4px;height:18px;background:#00A4A6;border-radius:2px;flex-shrink:0}
+/* NOTE: these title/label elements use plain block/table flow (not flex/inline-block)
+   because html2canvas drops inter-word spaces inside flex items and shrink-to-fit
+   inline-block boxes — block-flow text renders spaces correctly. */
+.rpt-section-title{font-size:15px;font-weight:700;color:#00205C;margin-bottom:14px;display:block}
+.rpt-section-title::before{content:'';display:inline-block;width:4px;height:18px;background:#00A4A6;border-radius:2px;vertical-align:middle;margin-inline-end:8px}
 .rpt-narrative{background:#f8fafb;border-left:3px solid #00A4A6;padding:14px 18px;border-radius:0 8px 8px 0;font-size:13px;color:#454F58;line-height:1.7;margin-bottom:16px;font-style:italic}
 .rpt-narrative-title{font-style:normal;font-weight:700;color:#00205C;font-size:13.5px;margin-bottom:8px}
 .rpt-narrative-body{font-style:italic}
@@ -132,9 +135,11 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 .rpt-table tr:nth-child(even) td{background:#f8fafb}
 .rpt-table tr.at-risk td{background:#fff5f5}
 .rpt-table .age-red{color:#E5484D;font-weight:700}
-.rpt-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700}
+.rpt-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap}
 .rpt-module-bar{margin-bottom:7px}
-.rpt-module-name{font-size:11px;color:#454F58;margin-bottom:3px;display:flex;justify-content:space-between}
+.rpt-module-name{font-size:11px;color:#454F58;margin-bottom:3px;display:table;width:100%}
+.rpt-module-name>span{display:table-cell}
+.rpt-module-name>span:last-child{text-align:end;white-space:nowrap}
 .rpt-bar-track{background:#E1E7EB;border-radius:3px;height:7px}
 .rpt-bar-fill{height:100%;border-radius:3px;transition:width .4s}
 .rpt-cx-box{background:#fffbf0;border:1.5px solid #F6CA59;border-radius:8px;padding:18px 20px;margin-top:8px}
@@ -1924,13 +1929,20 @@ html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الم
   }
 
   // ── Module breakdown (visual bars) ──
+  // Built two-per-row, each row wrapped in .rpt-keep so html2pdf never slices a
+  // row across the page boundary (a single multi-row grid gets sliced mid-row).
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"توزيع الأفكار حسب الوحدة":"Ideas by Module")+'</div>';
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
-  d.modules.forEach(function(m){
+  var moduleBar = function(m){
     var mod=m[0],v=m[1],pct2=Math.round((v.t/maxMod)*100),lpct=v.t?Math.round((v.l/v.t)*100):0;
-    html += '<div class="rpt-module-bar"><div class="rpt-module-name"><span style="font-weight:600">'+modN(mod)+'</span><span>'+v.t+' '+(isAR?"فكرة":"ideas")+' · '+lpct+'% '+(isAR?"مُطلقة":"launched")+'</span></div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:'+pct2+'%;background:'+( M_CLR[mod]||"#00A4A6")+'"></div></div></div>';
-  });
-  html += '</div></div>';
+    return '<div class="rpt-module-bar"><div class="rpt-module-name"><span style="font-weight:600">'+modN(mod)+'</span><span>'+v.t+' '+(isAR?"فكرة":"ideas")+' · '+lpct+'% '+(isAR?"مُطلقة":"launched")+'</span></div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:'+pct2+'%;background:'+( M_CLR[mod]||"#00A4A6")+'"></div></div></div>';
+  };
+  for(var mi=0; mi<d.modules.length; mi+=2){
+    html += '<div class="rpt-keep" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:7px">';
+    html += moduleBar(d.modules[mi]);
+    if(mi+1<d.modules.length) html += moduleBar(d.modules[mi+1]);
+    html += '</div>';
+  }
+  html += '</div>';
 
   // ── Design / UI / UX ──
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"متطلبات التصميم والواجهة":"Design & Interface Involvement")+'</div>';

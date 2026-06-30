@@ -116,8 +116,11 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 .rpt-cover-chip{background:rgba(255,255,255,.15);border-radius:20px;padding:5px 14px;font-size:11px;color:#fff;font-weight:600}
 .rpt-section{padding:24px 0;border-bottom:1px solid #E1E7EB}
 .rpt-section:last-child{border-bottom:none}
-.rpt-section-title{font-size:15px;font-weight:700;color:#00205C;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.rpt-section-title::before{content:'';display:inline-block;width:4px;height:18px;background:#00A4A6;border-radius:2px;flex-shrink:0}
+/* NOTE: these title/label elements use plain block/table flow (not flex/inline-block)
+   because html2canvas drops inter-word spaces inside flex items and shrink-to-fit
+   inline-block boxes — block-flow text renders spaces correctly. */
+.rpt-section-title{font-size:15px;font-weight:700;color:#00205C;margin-bottom:14px;display:block}
+.rpt-section-title::before{content:'';display:inline-block;width:4px;height:18px;background:#00A4A6;border-radius:2px;vertical-align:middle;margin-inline-end:8px}
 .rpt-narrative{background:#f8fafb;border-left:3px solid #00A4A6;padding:14px 18px;border-radius:0 8px 8px 0;font-size:13px;color:#454F58;line-height:1.7;margin-bottom:16px;font-style:italic}
 .rpt-narrative-title{font-style:normal;font-weight:700;color:#00205C;font-size:13.5px;margin-bottom:8px}
 .rpt-narrative-body{font-style:italic}
@@ -132,13 +135,11 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 .rpt-table tr:nth-child(even) td{background:#f8fafb}
 .rpt-table tr.at-risk td{background:#fff5f5}
 .rpt-table .age-red{color:#E5484D;font-weight:700}
-.rpt-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700}
-.rpt-chart-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:8px}
-.rpt-chart-box{background:#f8fafb;border:1px solid #E1E7EB;border-radius:8px;padding:16px}
-.rpt-chart-box canvas{max-height:180px}
-.rpt-chart-title{font-size:12px;font-weight:700;color:#00205C;margin-bottom:10px}
+.rpt-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap}
 .rpt-module-bar{margin-bottom:7px}
-.rpt-module-name{font-size:11px;color:#454F58;margin-bottom:3px;display:flex;justify-content:space-between}
+.rpt-module-name{font-size:11px;color:#454F58;margin-bottom:3px;display:table;width:100%}
+.rpt-module-name>span{display:table-cell}
+.rpt-module-name>span:last-child{text-align:end;white-space:nowrap}
 .rpt-bar-track{background:#E1E7EB;border-radius:3px;height:7px}
 .rpt-bar-fill{height:100%;border-radius:3px;transition:width .4s}
 .rpt-cx-box{background:#fffbf0;border:1.5px solid #F6CA59;border-radius:8px;padding:18px 20px;margin-top:8px}
@@ -594,14 +595,18 @@ function renderSyncStatus(){
 // LIVE SYNC — JSONP
 // ════════════════════════════════════════════════════
 function initDashboardLiveSync() {
-  var fallbackInput = document.createElement("input");
-  fallbackInput.type="file"; fallbackInput.id="fallbackCsvPicker";
-  fallbackInput.accept=".csv"; fallbackInput.style.display="none";
-  document.body.appendChild(fallbackInput);
-  fallbackInput.addEventListener("change", function(evt) {
-    var f=evt.target.files[0]; if(!f) return;
-    Papa.parse(f,{header:true,skipEmptyLines:true,complete:function(r){setSyncStatus("manual");parseRawEcosystemData(r.data);}});
-  });
+  // Create the hidden CSV fallback picker once. This function is called again
+  // after every manual sync, so guard against appending duplicate-ID elements.
+  if(!document.getElementById("fallbackCsvPicker")){
+    var fallbackInput = document.createElement("input");
+    fallbackInput.type="file"; fallbackInput.id="fallbackCsvPicker";
+    fallbackInput.accept=".csv"; fallbackInput.style.display="none";
+    document.body.appendChild(fallbackInput);
+    fallbackInput.addEventListener("change", function(evt) {
+      var f=evt.target.files[0]; if(!f) return;
+      Papa.parse(f,{header:true,skipEmptyLines:true,complete:function(r){setSyncStatus("manual");parseRawEcosystemData(r.data);}});
+    });
+  }
 
   setSyncStatus("fetching");
   var timeoutId = setTimeout(function(){setSyncStatus("timeout");}, 12000);
@@ -620,6 +625,10 @@ function initDashboardLiveSync() {
     setSyncStatus("success", ts);
     parseRawEcosystemData(json.data);
   };
+
+  // Remove any stale script element (e.g. left over from a prior timeout) before re-adding
+  var staleScript = document.getElementById("_jsonpScript");
+  if(staleScript) staleScript.parentNode.removeChild(staleScript);
 
   var script = document.createElement("script");
   script.id  = "_jsonpScript";
@@ -1736,11 +1745,14 @@ function smGetData(){
   // Top 10 non-launched by votes
   var top10 = nonLaunch.slice().sort(function(a,b){return b.votes-a.votes;}).slice(0,10);
 
-  // At-risk: non-launched, votes>=20, age>=90d
-  var atRisk = nonLaunch.filter(function(r){
+  // At-risk: non-launched, votes>=20, age>=90d.
+  // Keep the FULL count for the KPI/narrative; the table only displays the top 8.
+  var atRiskAll = nonLaunch.filter(function(r){
     var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
     return r.votes>=20 && days>=90;
-  }).sort(function(a,b){return b.votes-a.votes;}).slice(0,8);
+  }).sort(function(a,b){return b.votes-a.votes;});
+  var atRiskCount = atRiskAll.length;
+  var atRisk = atRiskAll.slice(0,8);
 
   // Module breakdown (all data)
   var modMap={};
@@ -1752,7 +1764,7 @@ function smGetData(){
   var uiCount     = data.filter(function(r){return (r.uiux||"").toUpperCase()==="UI";}).length;
   var uxCount     = data.filter(function(r){return (r.uiux||"").toUpperCase()==="UX";}).length;
 
-  return {rptLang,total,launched:launched.length,nonLaunched:nonLaunch.length,votes,pct,avgV,top10,atRisk,modules,designCount,uiCount,uxCount,dateLabel:from&&to?(from+" → "+to):"All Time",filterLabel:filterLabel};
+  return {rptLang,total,launched:launched.length,nonLaunched:nonLaunch.length,votes,pct,avgV,top10,atRisk,atRiskCount,modules,designCount,uiCount,uxCount,dateLabel:from&&to?(from+" → "+to):"All Time",filterLabel:filterLabel};
 }
 
 // ── Gemini AI narrative generation ──────────────────────────────
@@ -1793,7 +1805,7 @@ async function smGenerateNarrative(d, rptLang){
       lr:  parseFloat(d.pct),
       tv:  d.votes,
       av:  parseFloat(d.avgV),
-      ar:  d.atRisk.length,
+      ar:  d.atRiskCount,
       dc:  d.designCount,
       ui:  d.uiCount,
       ux:  d.uxCount,
@@ -1830,8 +1842,8 @@ async function smGenerateNarrative(d, rptLang){
 function smBuildReportHTML(d, narrative, cxComments){
   var isAR = d.rptLang==="ar";
   var dir  = isAR?"rtl":"ltr";
-  var M_EN_MAP = {"المبيعات والعملاء":"Sales & Customers","المنتجات والمخزون":"Products & Inventory","التقارير":"Reports","المحاسبة":"Accounting","المشتريات والموردين":"Purchasing","الربط مع التطبيقات":"Integrations","إعدادات الحساب":"Account Settings","لوحة التحكم":"Dashboard","المخزون":"Inventory"};
-  function modN(m){return isAR?m:(M_EN_MAP[m]||m);}
+  // Reuse the global module-name and status maps rather than duplicating them here.
+  function modN(m){return isAR?m:(M_EN[m]||m);}
   function sN(r){var c=S_CFG[r.status];return c?(isAR?c.ar:c.en):r.status;}
   function cText(r){return isAR?(r.content_ar||r.content_en||""):(r.content_en||r.content_ar||"");}
 
@@ -1839,9 +1851,8 @@ function smBuildReportHTML(d, narrative, cxComments){
   var dateStr = now.toLocaleDateString(isAR?"ar-SA":"en-GB",{year:"numeric",month:"long",day:"numeric"});
   var maxMod  = d.modules[0]?d.modules[0][1].t:1;
 
-  // Status badge colours
-  var S_CLR={"🚀تم الإطلاق":"#1BBE6E","📰 تم إضافة الفكرة":"#19A2A5","🔍 قيد المراجعة":"#F59E0B","⚒️ قيد التطوير":"#8B5CF6","✨ تم إطلاق نسخة تجريبية":"#2563EB","🤝 التجهيز للتطوير":"#EC4899"};
-  function sBadge(status){var c=S_CLR[status]||"#6A7279";return '<span class="rpt-badge" style="background:'+c+'22;color:'+c+'">'+sN({status:status})+'</span>';}
+  // Status badge colours come straight from the shared S_CFG status config.
+  function sBadge(status){var cfg=S_CFG[status];var c=cfg?cfg.c:"#6A7279";return '<span class="rpt-badge" style="background:'+c+'22;color:'+c+'">'+sN({status:status})+'</span>';}
 
   var html = '<div class="rpt-page" dir="'+dir+'">';
 
@@ -1898,7 +1909,7 @@ html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الم
   html += '<div class="rpt-kpi"><div class="rpt-kpi-val">'+d.total+'</div><div class="rpt-kpi-lbl">'+(isAR?"إجمالي الأفكار":"Total Ideas")+'</div></div>';
   html += '<div class="rpt-kpi" style="border-top-color:#1BBE6E"><div class="rpt-kpi-val" style="color:#1BBE6E">'+d.launched+'</div><div class="rpt-kpi-lbl">'+(isAR?"تم الإطلاق":"Launched")+'</div><div class="rpt-kpi-sub">'+d.pct+'% '+(isAR?"من الإجمالي":"of total")+'</div></div>';
   html += '<div class="rpt-kpi" style="border-top-color:#F59E0B"><div class="rpt-kpi-val" style="color:#F59E0B">'+d.votes.toLocaleString()+'</div><div class="rpt-kpi-lbl">'+(isAR?"إجمالي التصويتات":"Total Votes")+'</div><div class="rpt-kpi-sub">'+(isAR?"متوسط ":"Avg ")+d.avgV+'</div></div>';
-  html += '<div class="rpt-kpi" style="border-top-color:#EF4444"><div class="rpt-kpi-val" style="color:#EF4444">'+d.atRisk.length+'</div><div class="rpt-kpi-lbl">'+(isAR?"أفكار عالية الخطورة":"At-Risk Ideas")+'</div><div class="rpt-kpi-sub">'+(isAR?"تصويتات عالية · عمر طويل":"High votes · Long pending")+'</div></div>';
+  html += '<div class="rpt-kpi" style="border-top-color:#EF4444"><div class="rpt-kpi-val" style="color:#EF4444">'+d.atRiskCount+'</div><div class="rpt-kpi-lbl">'+(isAR?"أفكار عالية الخطورة":"At-Risk Ideas")+'</div><div class="rpt-kpi-sub">'+(isAR?"تصويتات عالية · عمر طويل":"High votes · Long pending")+'</div></div>';
   html += '</div></div>';
 
   // ── Top 10 non-launched ──
@@ -1921,13 +1932,20 @@ html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"الم
   }
 
   // ── Module breakdown (visual bars) ──
+  // Built two-per-row, each row wrapped in .rpt-keep so html2pdf never slices a
+  // row across the page boundary (a single multi-row grid gets sliced mid-row).
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"توزيع الأفكار حسب الوحدة":"Ideas by Module")+'</div>';
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
-  d.modules.forEach(function(m){
+  var moduleBar = function(m){
     var mod=m[0],v=m[1],pct2=Math.round((v.t/maxMod)*100),lpct=v.t?Math.round((v.l/v.t)*100):0;
-    html += '<div class="rpt-module-bar"><div class="rpt-module-name"><span style="font-weight:600">'+modN(mod)+'</span><span>'+v.t+' '+(isAR?"فكرة":"ideas")+' · '+lpct+'% '+(isAR?"مُطلقة":"launched")+'</span></div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:'+pct2+'%;background:'+( M_CLR[mod]||"#00A4A6")+'"></div></div></div>';
-  });
-  html += '</div></div>';
+    return '<div class="rpt-module-bar"><div class="rpt-module-name"><span style="font-weight:600">'+modN(mod)+'</span><span>'+v.t+' '+(isAR?"فكرة":"ideas")+' · '+lpct+'% '+(isAR?"مُطلقة":"launched")+'</span></div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:'+pct2+'%;background:'+( M_CLR[mod]||"#00A4A6")+'"></div></div></div>';
+  };
+  for(var mi=0; mi<d.modules.length; mi+=2){
+    html += '<div class="rpt-keep" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:7px">';
+    html += moduleBar(d.modules[mi]);
+    if(mi+1<d.modules.length) html += moduleBar(d.modules[mi+1]);
+    html += '</div>';
+  }
+  html += '</div>';
 
   // ── Design / UI / UX ──
   html += '<div class="rpt-section"><div class="rpt-section-title">'+(isAR?"متطلبات التصميم والواجهة":"Design & Interface Involvement")+'</div>';
@@ -1994,49 +2012,79 @@ document.getElementById("smReportContent").innerHTML =
 }
 
 // ── PDF download ─────────────────────────────────────────────────
-function downloadSummaryPdf(){
+async function downloadSummaryPdf(){
   if(!SM.generated){ smSetStatus("Generate the report first","error"); return; }
-  var el = document.getElementById("smReportContent");
+  var src  = document.getElementById("smReportContent");
   var isAR = document.getElementById("smLangSel").value==="ar";
-
-  // Unhide the footer link right before the PDF engine captures the DOM element
-  var pdfFooter = document.getElementById("rptPdfFooter");
-  if(pdfFooter) pdfFooter.style.display = "block";
-
-  // html2canvas's text engine reorders/overlaps Arabic glyphs when negative
-  // letter-spacing is applied (the cover title uses letter-spacing:-.02em).
-  // Neutralise letter-spacing on the title during capture so the glyphs join
-  // correctly. Scoped to the cover title only; removed again after capture.
-  var pdfFixStyle = document.createElement("style");
-  pdfFixStyle.id = "_pdfArabicFix";
-  pdfFixStyle.textContent = ".rpt-cover-title{letter-spacing:normal !important;}";
-  document.head.appendChild(pdfFixStyle);
 
   var now = new Date();
   var fname = "Rewaa_Executive_Summary_"+now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")+".pdf";
   smSetStatus(isAR?"جارٍ تحضير ملف PDF...":"Preparing PDF...","");
 
+  // Render from a clean clone placed at the document's top-left, OUTSIDE the modal's
+  // scroll container. This gives html2canvas correct geometry (no offset/clipping),
+  // and lets us enable foreignObjectRendering for Arabic — the browser's native text
+  // engine, which (unlike html2canvas's own engine) preserves Arabic word spacing and
+  // glyph shaping. English keeps the default engine, which renders LTR correctly.
+  var RENDER_WIDTH = 1040; // ≈ A4 landscape printable width at 96dpi (297mm − 20mm margins)
+  var clone = src.cloneNode(true);
+  clone.style.width = RENDER_WIDTH + "px";
+  // Force the OUTER wrapper to LTR. foreignObjectRendering mis-positions (shifts/clips)
+  // when the captured root is RTL; an LTR wrapper fixes the coordinate origin. The inner
+  // .rpt-page keeps its own dir="rtl", so the visual RTL layout is unchanged.
+  clone.style.direction = "ltr";
+  var cloneFooter = clone.querySelector("#rptPdfFooter");
+  if(cloneFooter) cloneFooter.style.display = "block";
+
+  var stage = document.createElement("div");
+  stage.id = "_pdfStage";
+  stage.style.cssText = "position:fixed;left:0;top:0;width:"+RENDER_WIDTH+"px;background:#fff;z-index:0;direction:ltr;";
+  stage.appendChild(clone);
+  document.body.appendChild(stage);
+
+  function _pdfCleanup(){
+    var s = document.getElementById("_pdfStage");
+    if(s) s.parentNode.removeChild(s);
+  }
+
   var opt = {
     margin: [10,10,10,10],
     filename: fname,
     image: {type:"jpeg",quality:0.95},
-    html2canvas: {scale:2,useCORS:true,logging:false},
-    jsPDF: {unit:"mm",format:"a4",orientation:"landscape"}
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+      // width/windowWidth pin the render viewport to the clone width so foreignObject
+      // engages and Arabic word spacing/shaping render correctly. The LTR wrapper (set
+      // on the stage/clone above) prevents the RTL coordinate shift this used to cause.
+      width: RENDER_WIDTH,
+      windowWidth: RENDER_WIDTH,
+      // foreignObjectRendering uses the browser's native text engine so Arabic word
+      // spacing and shaping are correct (html2canvas's own engine drops Arabic spaces).
+      foreignObjectRendering: isAR
+    },
+    jsPDF: {unit:"mm",format:"a4",orientation:"landscape"},
+    // Explicit avoid selectors are more reliable than CSS-only page-break rules,
+    // especially for items inside CSS grids (module bars, KPI cards) which html2pdf
+    // would otherwise slice across the page boundary.
+    pagebreak: {
+      mode: ["css","legacy"],
+      avoid: [".rpt-module-bar",".rpt-kpi",".rpt-narrative",".rpt-keep",".rpt-section-title",".rpt-cx-box","tr"]
+    }
   };
 
-  function _pdfCleanup(){
-    if(pdfFooter) pdfFooter.style.display = "none";
-    var fix = document.getElementById("_pdfArabicFix");
-    if(fix) fix.parentNode.removeChild(fix);
-  }
-
-  html2pdf().set(opt).from(el).save().then(function(){
+  try {
+    // Ensure web fonts are fully loaded before capture so glyph metrics are correct
+    if(document.fonts && document.fonts.ready) { try{ await document.fonts.ready; }catch(e){} }
+    await html2pdf().set(opt).from(clone).save();
     _pdfCleanup();
     smSetStatus(isAR?"تم تحميل الملف ✓":"PDF downloaded ✓","success");
-  }).catch(function(e){
+  } catch(e){
     _pdfCleanup();
     smSetStatus("PDF error: "+e.message,"error");
-  });
+  }
 }
 
 // ── Email send via n8n ───────────────────────────────────────────

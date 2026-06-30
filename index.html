@@ -2036,11 +2036,11 @@ function downloadSummaryPdf(){
   if(f) f.style.display = "block";
   var dir = isAR ? "rtl" : "ltr";
   var printCss =
-    // margin:0 leaves the browser no page-margin area, so Chrome's auto header (document
-    // title) and footer (page URL) are not drawn. Page margins are restored via body padding.
-    "@page{size:A4 landscape;margin:0}" +
+    // Real per-page margins so every page (including continuation pages) has even spacing.
+    // Chrome draws its auto header (title) / footer (URL) in this margin area — hide them
+    // once via the print dialog: More settings → untick "Headers and footers" (remembered).
+    "@page{size:A4 landscape;margin:12mm}" +
     "html,body{margin:0;background:#fff}" +
-    "body{padding:10mm}" +
     "*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}";
   var html =
     '<!DOCTYPE html><html dir="'+dir+'" lang="'+(isAR?"ar":"en")+'">'+

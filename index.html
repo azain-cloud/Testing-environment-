@@ -175,8 +175,11 @@ body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:v
 }
 
 @media print {
+  /* Let the cover flow into the content like the on-screen preview; just keep the
+     cover banner itself from being split across a page break. */
   .rpt-cover {
-    page-break-after: always !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }
 
@@ -490,7 +493,7 @@ body.ltr .ms-drop{right:auto;left:0}
 // ════════════════════════════════════════════════════
 // CONFIG
 // ════════════════════════════════════════════════════
-var APPS_SCRIPT_URL      = "https://script.google.com/macros/s/AKfycbyvj2fDlZ7_jf1hfvqCMkOauoqyMOTmB8aqAju4I2kS5gg_IyzIhPhFxhvxG0a_h_zaIA/exec";
+var APPS_SCRIPT_URL      = "https://script.google.com/macros/s/AKfycbyvj2fDlZ7_jf1hfvqCMkOauoqyMOTmB8aqAju4I2kS5gg_IyzIhPhFxhvxG0a_h_zaIA/exec"";
 var GOOGLE_CLIENT_ID     = "11249982937-ru4m3a85dkr6a7errjlj5hcljoujmr18.apps.googleusercontent.com";
 var ALLOWED_LOGIN_DOMAIN = "rewaa.com";
 var DATE_MIN             = "2022-10-27";
@@ -2011,92 +2014,70 @@ document.getElementById("smReportContent").innerHTML =
   document.getElementById("smGenerateBtn").disabled=false;
 }
 
-// ── PDF download ─────────────────────────────────────────────────
-async function downloadSummaryPdf(){
+// ── PDF download (native browser print → "Save as PDF") ──────────────
+// We render the report through the browser's own print engine instead of html2canvas.
+// This is the same engine that draws the on-screen preview, so the output is visually
+// identical (gradients, colours, flex/grid) AND Arabic shaping/spacing is correct —
+// neither of which html2canvas can do. Works for both languages, no server, no cost.
+// The user picks "Save as PDF" as the destination in the print dialog.
+function downloadSummaryPdf(){
   if(!SM.generated){ smSetStatus("Generate the report first","error"); return; }
-  var src  = document.getElementById("smReportContent");
   var isAR = document.getElementById("smLangSel").value==="ar";
 
   var now = new Date();
-  var fname = "Rewaa_Executive_Summary_"+now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")+".pdf";
-  smSetStatus(isAR?"جارٍ تحضير ملف PDF...":"Preparing PDF...","");
+  var fname = "Rewaa_Executive_Summary_"+now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
 
-  // Render from a clean clone placed at the document's top-left, OUTSIDE the modal's
-  // scroll container. This gives html2canvas correct geometry (no offset/clipping),
-  // and lets us enable foreignObjectRendering for Arabic — the browser's native text
-  // engine, which (unlike html2canvas's own engine) preserves Arabic word spacing and
-  // glyph shaping. English keeps the default engine, which renders LTR correctly.
-  var RENDER_WIDTH = 1040; // ≈ A4 landscape printable width at 96dpi (297mm − 20mm margins)
-  var clone = src.cloneNode(true);
-  clone.style.width = RENDER_WIDTH + "px";
-  // Force the OUTER wrapper to LTR. foreignObjectRendering mis-positions (shifts/clips)
-  // when the captured root is RTL; an LTR wrapper fixes the coordinate origin. The inner
-  // .rpt-page keeps its own dir="rtl", so the visual RTL layout is unchanged.
-  clone.style.direction = "ltr";
-  var cloneFooter = clone.querySelector("#rptPdfFooter");
-  if(cloneFooter) cloneFooter.style.display = "block";
+  // Build a standalone document: the report markup + every page style inlined, plus
+  // print rules (A4 landscape, exact colours so gradients/backgrounds aren't stripped).
+  var styles = "";
+  document.querySelectorAll("style").forEach(function(s){ styles += s.textContent; });
+  var clone = document.getElementById("smReportContent").cloneNode(true);
+  var f = clone.querySelector("#rptPdfFooter");
+  if(f) f.style.display = "block";
+  var dir = isAR ? "rtl" : "ltr";
+  var printCss =
+    "@page{size:A4 landscape;margin:10mm}" +
+    "html,body{margin:0;background:#fff}" +
+    "*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}";
+  var html =
+    '<!DOCTYPE html><html dir="'+dir+'" lang="'+(isAR?"ar":"en")+'">'+
+    '<head><meta charset="UTF-8"><title>'+fname+'</title>'+
+    '<style>'+styles+'\n'+printCss+'</style></head>'+
+    '<body>'+clone.innerHTML+'</body></html>';
 
-  var stage = document.createElement("div");
-  stage.id = "_pdfStage";
-  stage.style.cssText = "position:absolute;left:0;top:0;width:"+RENDER_WIDTH+"px;background:#fff;z-index:0;direction:ltr;";
-  stage.appendChild(clone);
-  document.body.appendChild(stage);
+  smSetStatus(isAR?"جارٍ فتح نافذة الطباعة — اختر «حفظ كـ PDF»":"Opening print — choose “Save as PDF”","");
 
-  // Capture from a known origin: scroll the window to the top so foreignObject's
-  // document-coordinate math doesn't drift lower-down content horizontally.
-  window.scrollTo(0,0);
-  var RENDER_HEIGHT = stage.scrollHeight;
+  // Render into a hidden iframe and invoke its print dialog.
+  var existing = document.getElementById("_pdfPrintFrame");
+  if(existing) existing.remove();
+  var iframe = document.createElement("iframe");
+  iframe.id = "_pdfPrintFrame";
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  document.body.appendChild(iframe);
 
-  function _pdfCleanup(){
-    var s = document.getElementById("_pdfStage");
-    if(s) s.parentNode.removeChild(s);
-  }
+  var idoc = iframe.contentWindow.document;
+  idoc.open(); idoc.write(html); idoc.close();
 
-  var opt = {
-    margin: [10,10,10,10],
-    filename: fname,
-    image: {type:"jpeg",quality:0.95},
-    html2canvas: {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: "#ffffff",
-      // width/windowWidth pin the render viewport to the clone width so foreignObject
-      // engages and Arabic word spacing/shaping render correctly. The LTR wrapper (set
-      // on the stage/clone above) prevents the RTL coordinate shift this used to cause.
-      width: RENDER_WIDTH,
-      windowWidth: RENDER_WIDTH,
-      height: RENDER_HEIGHT,
-      windowHeight: RENDER_HEIGHT,
-      // Pin scroll origin to 0,0 so content lower in the document isn't shifted sideways.
-      scrollX: 0,
-      scrollY: 0,
-      x: 0,
-      y: 0,
-      // foreignObjectRendering uses the browser's native text engine so Arabic word
-      // spacing and shaping are correct (html2canvas's own engine drops Arabic spaces).
-      foreignObjectRendering: isAR
-    },
-    jsPDF: {unit:"mm",format:"a4",orientation:"landscape"},
-    // Explicit avoid selectors are more reliable than CSS-only page-break rules,
-    // especially for items inside CSS grids (module bars, KPI cards) which html2pdf
-    // would otherwise slice across the page boundary.
-    pagebreak: {
-      mode: ["css","legacy"],
-      avoid: [".rpt-module-bar",".rpt-kpi",".rpt-narrative",".rpt-keep",".rpt-section-title",".rpt-cx-box","tr"]
+  function cleanup(){ var fr=document.getElementById("_pdfPrintFrame"); if(fr) fr.remove(); }
+  var fired = false;
+  function go(){
+    if(fired) return; fired = true;
+    var win = iframe.contentWindow;
+    win.onafterprint = cleanup;
+    setTimeout(cleanup, 120000); // safety net if onafterprint never fires
+    try {
+      win.focus();
+      win.print();
+      smSetStatus(isAR?"اختر «حفظ كـ PDF» من نافذة الطباعة":"Choose “Save as PDF” in the print dialog","success");
+    } catch(e){
+      cleanup();
+      smSetStatus("Print error: "+e.message,"error");
     }
-  };
-
-  try {
-    // Ensure web fonts are fully loaded before capture so glyph metrics are correct
-    if(document.fonts && document.fonts.ready) { try{ await document.fonts.ready; }catch(e){} }
-    await html2pdf().set(opt).from(clone).save();
-    _pdfCleanup();
-    smSetStatus(isAR?"تم تحميل الملف ✓":"PDF downloaded ✓","success");
-  } catch(e){
-    _pdfCleanup();
-    smSetStatus("PDF error: "+e.message,"error");
   }
+
+  // Print once fonts/layout are ready; fall back to a timer if fonts.ready never resolves.
+  if(idoc.fonts && idoc.fonts.ready){ idoc.fonts.ready.then(go); }
+  setTimeout(go, 800);
 }
 
 // ── Email send via n8n ───────────────────────────────────────────

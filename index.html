@@ -2038,9 +2038,14 @@ async function downloadSummaryPdf(){
 
   var stage = document.createElement("div");
   stage.id = "_pdfStage";
-  stage.style.cssText = "position:fixed;left:0;top:0;width:"+RENDER_WIDTH+"px;background:#fff;z-index:0;direction:ltr;";
+  stage.style.cssText = "position:absolute;left:0;top:0;width:"+RENDER_WIDTH+"px;background:#fff;z-index:0;direction:ltr;";
   stage.appendChild(clone);
   document.body.appendChild(stage);
+
+  // Capture from a known origin: scroll the window to the top so foreignObject's
+  // document-coordinate math doesn't drift lower-down content horizontally.
+  window.scrollTo(0,0);
+  var RENDER_HEIGHT = stage.scrollHeight;
 
   function _pdfCleanup(){
     var s = document.getElementById("_pdfStage");
@@ -2061,6 +2066,13 @@ async function downloadSummaryPdf(){
       // on the stage/clone above) prevents the RTL coordinate shift this used to cause.
       width: RENDER_WIDTH,
       windowWidth: RENDER_WIDTH,
+      height: RENDER_HEIGHT,
+      windowHeight: RENDER_HEIGHT,
+      // Pin scroll origin to 0,0 so content lower in the document isn't shifted sideways.
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
       // foreignObjectRendering uses the browser's native text engine so Arabic word
       // spacing and shaping are correct (html2canvas's own engine drops Arabic spaces).
       foreignObjectRendering: isAR

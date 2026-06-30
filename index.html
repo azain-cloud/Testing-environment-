@@ -2036,8 +2036,11 @@ function downloadSummaryPdf(){
   if(f) f.style.display = "block";
   var dir = isAR ? "rtl" : "ltr";
   var printCss =
-    "@page{size:A4 landscape;margin:10mm}" +
+    // margin:0 leaves the browser no page-margin area, so Chrome's auto header (document
+    // title) and footer (page URL) are not drawn. Page margins are restored via body padding.
+    "@page{size:A4 landscape;margin:0}" +
     "html,body{margin:0;background:#fff}" +
+    "body{padding:10mm}" +
     "*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}";
   var html =
     '<!DOCTYPE html><html dir="'+dir+'" lang="'+(isAR?"ar":"en")+'">'+

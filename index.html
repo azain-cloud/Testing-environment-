@@ -1749,13 +1749,12 @@ function smGetData(){
   var top10 = nonLaunch.slice().sort(function(a,b){return b.votes-a.votes;}).slice(0,10);
 
   // At-risk: non-launched, votes>=20, age>=90d.
-  // Keep the FULL count for the KPI/narrative; the table only displays the top 8.
-  var atRiskAll = nonLaunch.filter(function(r){
+  // Table shows the full list so it matches the KPI card; count kept for KPI/narrative.
+  var atRisk = nonLaunch.filter(function(r){
     var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
     return r.votes>=20 && days>=90;
   }).sort(function(a,b){return b.votes-a.votes;});
-  var atRiskCount = atRiskAll.length;
-  var atRisk = atRiskAll.slice(0,8);
+  var atRiskCount = atRisk.length;
 
   // Module breakdown (all data)
   var modMap={};
@@ -1784,7 +1783,7 @@ async function smGenerateNarrative(d, rptLang){
     };
   });
 
-  var atRiskPayload = d.atRisk.map(function(r){
+  var atRiskPayload = d.atRisk.slice(0, 8).map(function(r){
     var days = r.date ? Math.floor((new Date()-new Date(r.date))/(1000*60*60*24)) : 0;
     return {
       i: (r.content_en || r.content_ar || "").substring(0, 100),
